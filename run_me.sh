@@ -1,0 +1,9 @@
+#!/bin/bash
+mkdir dataset
+mkdir dataset/HP_HessianPatches
+wget http://cmp.felk.cvut.cz/~mishkdmy/datasets/HPatches_HessianPatches/_test.pt
+mv _test.pt dataset/HP_HessianPatches/_test.pt
+mkdir dataset/6Brown
+mv dataset/*.pt dataset/6Brown
+python -utt gen_ds.py
+python -utt train_AffNet.py --gpu-id=0 --dataroot=dataset/6Brown --lr=0.005 --n-pairs=10000000 --batch-size=1024 --descriptor=SIFT --epochs=20 --expname=AffNetFast_lr005_10M_20ep_aswap  2>&1 | tee  affnet.log &
