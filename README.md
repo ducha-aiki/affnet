@@ -1,7 +1,7 @@
 # AffNet model implementation
 CNN-based affine shape estimator.
 
-AffNet model implementation in PyTorch for TechReport  "Learning Discriminative Affine Regions via Discriminability"
+AffNet model implementation in PyTorch for TechReport  "[Learning Discriminative Affine Regions via Discriminability](https://arxiv.org/abs/1711.06704)"
 
 
 ## Datasets and Training
