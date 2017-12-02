@@ -8,7 +8,7 @@ AffNet generates up to twice more correspondeces compared to Baumberg iterations
 ![HesAffNet](imgs/graf16HesAffNet.jpg)
 
 
-## Retrieval on Oxford5k
+## Retrieval on Oxford5k, mAP
 
 | Detector + Descriptor | BoW  |  BoW + SV | BoW + SV + QE | HQE + MA |
 | -----    | ----  |  ---- | ---- | ---- |
