@@ -8,6 +8,14 @@ AffNet generates up to twice more correspondeces compared to Baumberg iterations
 ![HesAffNet](imgs/graf16HesAffNet.jpg)
 
 
+## Retrieval on Oxford5k
+
+| Detector + Descriptor | BoW  |  BoW + SV | BoW + SV + QE | HQE + MA |
+| -----    | ----  |  ---- | ---- | ---- |
+| [HesAff](https://github.com/perdoch/hesaff) + [RootSIFT](http://ieeexplore.ieee.org/document/6248018/)    | 55.1  |  63.0 | 78.4 | 88.0 |
+| [HesAff](https://github.com/perdoch/hesaff) + [HardNet++](https://github.com/DagnyT/hardnet)   | 60.8  |  69.6 | 84.5 | 88.3 |
+| HesAffNet + [HardNet++](https://github.com/DagnyT/hardnet)   | **68.3**  |  **77.8** | **89.0** | **89.5** |
+
 ## Datasets and Training
 
 To download datasets and start learning affnet:
