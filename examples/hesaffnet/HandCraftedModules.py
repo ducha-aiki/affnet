@@ -5,7 +5,7 @@ from torch.autograd import Variable
 import math
 import numpy as np
 from Utils import  GaussianBlur, CircularGaussKernel
-from LAF import abc2A,rectifyAffineTransformationUpIsUp, sc_y_x2LAFs
+from LAF import abc2A,rectifyAffineTransformationUpIsUp, sc_y_x2LAFs, sc_y_x_hes2LAFs
 from Utils import generate_2dgrid, generate_2dgrid, generate_3dgrid
 from Utils import zero_response_at_border
 
@@ -56,7 +56,7 @@ class ScalePyramid(nn.Module):
         return pyr, sigmas, pixel_dists
 
 class HessianResp(nn.Module):
-    def __init__(self):
+    def __init__(self, return_aux = False):
         super(HessianResp, self).__init__()
         
         self.gx =  nn.Conv2d(1, 1, kernel_size=(1,3), bias = False)
@@ -70,11 +70,14 @@ class HessianResp(nn.Module):
         
         self.gyy =  nn.Conv2d(1, 1, kernel_size=(3,1), bias = False)
         self.gyy.weight.data = torch.from_numpy(np.array([[[[1.0], [-2.0], [1.0]]]], dtype=np.float32))
+        self.return_aux = return_aux;
         return
     def forward(self, x, scale):
         gxx = self.gxx(F.pad(x, (1,1,0, 0), 'replicate'))
         gyy = self.gyy(F.pad(x, (0,0, 1,1), 'replicate'))
         gxy = self.gy(F.pad(self.gx(F.pad(x, (1,1,0, 0), 'replicate')), (0,0, 1,1), 'replicate'))
+        if self.return_aux:
+            return torch.abs(gxx * gyy - gxy * gxy) * (scale**4), gxx, gxy, gyy
         return torch.abs(gxx * gyy - gxy * gxy) * (scale**4)
 
 
@@ -220,7 +223,9 @@ class NMS3d(nn.Module):
             return ((x - self.MP(x) + self.eps) > 0).float() * x
         
 class NMS3dAndComposeA(nn.Module):
-    def __init__(self, w = 0, h = 0, kernel_size = 3, threshold = 0, scales = None, border = 3, mrSize = 1.0):
+    def __init__(self, w = 0, h = 0, kernel_size = 3,
+                 threshold = 0, scales = None, border = 3, mrSize = 1.0,
+                 LAF_from_hes = False):
         super(NMS3dAndComposeA, self).__init__()
         self.eps = 1e-7
         self.ks = 3
@@ -229,6 +234,7 @@ class NMS3dAndComposeA(nn.Module):
         self.border = border
         self.mrSize = mrSize
         self.beta = 1.0
+        self.LAF_from_hes = LAF_from_hes;
         self.grid_ones = Variable(torch.ones(3,3,3,3), requires_grad=False)
         self.NMS3d = NMS3d(kernel_size, threshold)
         if (w > 0) and (h > 0):
@@ -238,6 +244,10 @@ class NMS3dAndComposeA(nn.Module):
             self.spatial_grid = None
         return
     def forward(self, low, cur, high, num_features = 0, octaveMap = None, scales = None):
+        if self.LAF_from_hes:
+            low,gxxl,gxyl,gyyl = low
+            cur,gxxc,gxyc,gyyc = cur
+            high,gxxh,gxyh,gyyh = high
         assert low.size() == cur.size() == high.size()
         #Filter responce map
         self.is_cuda = low.is_cuda;
@@ -249,7 +259,7 @@ class NMS3dAndComposeA(nn.Module):
         else:
             nmsed_resp = zero_response_at_border(self.NMS3d(resp3d.unsqueeze(1)).squeeze(1)[:,1:2,:,:], mrSize_border)
         
-        num_of_nonzero_responces = (nmsed_resp > 0).sum().data[0]
+        num_of_nonzero_responces = (nmsed_resp > 0).int().sum().data[0]
         if (num_of_nonzero_responces == 0):
             return None,None,None
         if octaveMap is not None:
@@ -261,6 +271,8 @@ class NMS3dAndComposeA(nn.Module):
         else:
             idxs = nmsed_resp.data.nonzero().squeeze()
             nmsed_resp = nmsed_resp[idxs]
+        if self.LAF_from_hes:
+            gxxc,gxyc,gyyc = gxxc.view(-1)[idxs],gxyc.view(-1)[idxs],gyyc.view(-1)[idxs]
         #Get point coordinates grid
         
         if type(scales) is not list:
@@ -289,4 +301,6 @@ class NMS3dAndComposeA(nn.Module):
         sc_y_x[:,0] = sc_y_x[:,0] / min_size
         sc_y_x[:,1] = sc_y_x[:,1] / float(cur.size(2))
         sc_y_x[:,2] = sc_y_x[:,2] / float(cur.size(3))
+        if self.LAF_from_hes:
+            return nmsed_resp, sc_y_x_hes2LAFs(sc_y_x,gxxc,gxyc,gyyc), octaveMap
         return nmsed_resp, sc_y_x2LAFs(sc_y_x), octaveMap

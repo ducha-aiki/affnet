@@ -29,18 +29,21 @@ class ScaleSpaceAffinePatchExtractor(nn.Module):
         self.nlevels = nlevels
         self.num_Baum_iters = num_Baum_iters
         self.init_sigma = init_sigma
-        if RespNet is not None:
-            self.RespNet = RespNet
-        else:
-            self.RespNet = HessianResp()
-        if OriNet is not None:
-            self.OriNet = OriNet
-        else:
-            self.OriNet= OrientationDetector(patch_size = 19);
+        self.LAF_from_hes = False
         if AffNet is not None:
             self.AffNet = AffNet
         else:
             self.AffNet = AffineShapeEstimator(patch_size = 19)
+        if self.AffNet == 'Hessian':
+            self.LAF_from_hes = True
+        if RespNet is not None:
+            self.RespNet = RespNet
+        else:
+            self.RespNet = HessianResp(self.LAF_from_hes)
+        if OriNet is not None:
+            self.OriNet = OriNet
+        else:
+            self.OriNet= OrientationDetector(patch_size = 19);
         self.ScalePyrGen = ScalePyramid(nLevels = self.nlevels, init_sigma = self.init_sigma, border = self.b)
         return
     
@@ -65,7 +68,8 @@ class ScaleSpaceAffinePatchExtractor(nn.Module):
             octaveMap = (self.scale_pyr[oct_idx][0] * 0).byte()
             nms_f = NMS3dAndComposeA(w = octave[0].size(3),
                                      h =  octave[0].size(2),
-                                     border = self.b, mrSize = self.mrSize)
+                                     border = self.b, mrSize = self.mrSize,
+                                     LAF_from_hes = self.LAF_from_hes)
             for level_idx in range(1, len(octave)-1):
                 if cur is None:
                     low = self.RespNet(octave[level_idx - 1], (sigmas_oct[level_idx - 1 ]))

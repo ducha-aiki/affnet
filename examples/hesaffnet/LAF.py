@@ -268,6 +268,13 @@ def sc_y_x2LAFs(sc_y_x):
                                     sc_y_x[:,1:2].unsqueeze(-1)], dim=1)], dim = 2)
         
     return LAFs
+def sc_y_x_hes2LAFs(sc_y_x, gxx,gxy,gyy):
+    A = rectifyAffineTransformationUpIsUp(abc2A(gxx,gxy,gyy))
+    LAFs  = torch.cat([sc_y_x[:,:1].unsqueeze(1).expand_as(A) * A,
+                       torch.cat([sc_y_x[:,2:].unsqueeze(-1),
+                                    sc_y_x[:,1:2].unsqueeze(-1)], dim=1)], dim = 2)
+        
+    return LAFs
 def get_LAFs_scales(LAFs):
     return torch.sqrt(torch.abs(LAFs[:,0,0] *LAFs[:,1,1] - LAFs[:,0,1] * LAFs[:,1,0]) + 1e-12)
 
