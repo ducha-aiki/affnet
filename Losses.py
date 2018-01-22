@@ -84,7 +84,7 @@ def loss_L2Net(anchor, positive, anchor_swap = False,  margin = 1.0, loss_type =
     return loss
 
 def loss_HardNet(anchor, positive, anchor_swap = False, anchor_ave = False,\
-        margin = 1.0, batch_reduce = 'min', loss_type = "triplet_margin"):
+        margin = 1.0, batch_reduce = 'min', loss_type = "triplet_margin", return_mean = True):
     """HardNet margin loss - calculates loss based on distance matrix based on positive distance and closest negative distance.
     """
 
@@ -149,8 +149,10 @@ def loss_HardNet(anchor, positive, anchor_swap = False, anchor_ave = False,\
     else: 
         print ('Unknown loss type. Try triplet_margin, softmax or contrastive')
         sys.exit(1)
-    loss = torch.mean(loss)
-    return loss
+    if return_mean:
+        return torch.mean(loss)
+    else:
+        return loss
 
 
 def global_orthogonal_regularization(anchor, negative):

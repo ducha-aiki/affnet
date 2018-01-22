@@ -40,13 +40,30 @@ class OriNetFast(nn.Module):
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias = False),
             nn.BatchNorm2d(64, affine=False),
             nn.ReLU(),
-            nn.Dropout(0.25),
-            nn.Conv2d(64, 2, kernel_size=int(PS/4), stride=1,padding=1, bias = True),
+            nn.Dropout(0.25)
+        )
+        self.sincos =  nn.Sequential(nn.Conv2d(64, 2, kernel_size=int(PS/4), stride=1,padding=1, bias = True),
             nn.Tanh(),
+            nn.AdaptiveAvgPool2d(1)
+        )
+        self.matchability = nn.Sequential(nn.Conv2d(64, 1, kernel_size=int(PS/4), stride=1,padding=1, bias = True),
+            nn.Sigmoid(),
+            nn.AdaptiveAvgPool2d(1)
+        )
+        self.uniqueness = nn.Sequential(nn.Conv2d(64, 1, kernel_size=int(PS/4), stride=1,padding=1, bias = True),
+            nn.Sigmoid(),
+            nn.AdaptiveAvgPool2d(1)
+        )
+        self.repeatability = nn.Sequential(nn.Conv2d(64, 1, kernel_size=int(PS/4), stride=1,padding=1, bias = True),
+            nn.Sigmoid(),
             nn.AdaptiveAvgPool2d(1)
         )
         self.PS = PS
         self.features.apply(self.weights_init)
+        self.sincos.apply(self.weights_init)
+        self.matchability.apply(self.weights_init)
+        self.uniqueness.apply(self.weights_init)
+        self.repeatability.apply(self.weights_init)
         self.halfPS = int(PS/4)
         return
     def input_norm(self,x):
@@ -62,12 +79,21 @@ class OriNetFast(nn.Module):
             except:
                 pass
         return
-    def forward(self, input, return_rot_matrix = True):
-        xy = self.features(self.input_norm(input)).view(-1,2) 
+    def forward(self, input, mode = 'RotationMatrix'):
+        feats = self.features(self.input_norm(input))
+        xy = self.sincos(feats).view(-1,2) 
         angle = torch.atan2(xy[:,0] + 1e-8, xy[:,1]+1e-8);
-        if return_rot_matrix:
+        u = self.uniqueness(feats).view(-1,1) 
+        r = self.repeatability(feats).view(-1,1) 
+        m = self.matchability(feats).view(-1,1)
+        if type(mode) is bool:
+            mode = 'RotationMatrix'
+        if mode == 'RotationMatrix':
             return get_rotation_matrix(angle)
-        return angle
+        elif mode == 'RotationMatrixURM':
+            return get_rotation_matrix(angle),u,r,m
+        else:
+            return angle
 
 class GHH(nn.Module):
     def __init__(self, n_in, n_out, s = 4, m = 4):
