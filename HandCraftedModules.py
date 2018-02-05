@@ -249,7 +249,7 @@ class NMS3dAndComposeA(nn.Module):
         else:
             nmsed_resp = zero_response_at_border(self.NMS3d(resp3d.unsqueeze(1)).squeeze(1)[:,1:2,:,:], mrSize_border)
         
-        num_of_nonzero_responces = (nmsed_resp > 0).sum().data[0]
+        num_of_nonzero_responces = (nmsed_resp > 0).float().sum().data[0]
         if (num_of_nonzero_responces == 0):
             return None,None,None
         if octaveMap is not None:
