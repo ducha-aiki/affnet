@@ -50,8 +50,8 @@ HA = ScaleSpaceAffinePatchExtractor( mrSize = 5.192, num_features = nfeats, bord
 if USE_CUDA:
     HA = HA.cuda()
     var_image_reshape = var_image_reshape.cuda()
-
-LAFs, resp = HA(var_image_reshape)
+with torch.no_grad():
+    LAFs, resp = HA(var_image_reshape)
 ells = LAFs2ell(LAFs.data.cpu().numpy())
 
 np.savetxt(output_fname, ells, delimiter=' ', fmt='%10.10f')

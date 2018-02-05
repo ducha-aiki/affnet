@@ -121,13 +121,13 @@ def LAFs2ell(in_LAFs):
         ellipses[i,4] = A[1,1]
     return ellipses
 
-def visualize_LAFs(img, LAFs):
+def visualize_LAFs(img, LAFs, color = 'r'):
     work_LAFs = convertLAFs_to_A23format(LAFs)
     plt.figure()
     plt.imshow(255 - img)
     for i in range(len(work_LAFs)):
         ell = LAF2pts(work_LAFs[i,:,:])
-        plt.plot( ell[:,0], ell[:,1], 'r')
+        plt.plot( ell[:,0], ell[:,1], color)
     plt.show()
     return 
 
