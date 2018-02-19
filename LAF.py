@@ -139,7 +139,7 @@ def get_normalized_affine_shape(tilt, angle_in_radians):
     tilt_A = Variable(torch.eye(2).view(1,2,2).repeat(num,1,1))
     if tilt.is_cuda:
         tilt_A = tilt_A.cuda()
-    tilt_A[:,0,0] = tilt;
+    tilt_A[:,0:1,0:1] = tilt;
     rotmat = get_rotation_matrix(angle_in_radians)
     out_A = rectifyAffineTransformationUpIsUp(torch.bmm(rotmat, torch.bmm(tilt_A, rotmat)))
     #re_scale = (1.0/torch.sqrt((out_A **2).sum(dim=1).max(dim=1)[0])) #It is heuristic to for keeping scale change small
