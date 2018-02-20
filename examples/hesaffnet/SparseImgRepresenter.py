@@ -165,8 +165,7 @@ class ScaleSpaceAffinePatchExtractor(nn.Module):
         ### Detect orientation
         for i in range(max_iters):
             angles = self.OriNet(patches_small)
-            #print np.degrees(ori.data.cpu().numpy().ravel()[1])
-            LAFs = torch.cat([torch.bmm(angles2A(angles), LAFs[:,:,:2]), LAFs[:,:,2:]], dim = 2)
+            LAFs = torch.cat([torch.bmm( LAFs[:,:,:2], angles2A(angles)), LAFs[:,:,2:]], dim = 2)
             if i != max_iters:
                 patches_small = extract_patches_from_pyramid_with_inv_index(self.scale_pyr, pyr_inv_idxs, LAFs, PS = self.OriNet.PS)        
         return LAFs
@@ -178,7 +177,7 @@ class ScaleSpaceAffinePatchExtractor(nn.Module):
                                                       normalizeLAFs(dLAFs, self.scale_pyr[0][0].size(3), self.scale_pyr[0][0].size(2)), 
                                                       PS = PS)
         return patches
-    def forward(self,x):
+    def forward(self,x, do_ori = False):
         ### Detection
         t = time.time()
         num_features_prefilter = self.num
@@ -192,8 +191,9 @@ class ScaleSpaceAffinePatchExtractor(nn.Module):
             responses, LAFs, final_pyr_idxs, final_level_idxs  = self.getAffineShape(responses, LAFs, final_pyr_idxs, final_level_idxs, self.num)
         print time.time() - t, 'affine shape iters'
         t = time.time()
-        #LAFs = self.getOrientation(scale_pyr, LAFs, final_pyr_idxs, final_level_idxs)
-        #pyr_inv_idxs = get_inverted_pyr_index(scale_pyr, final_pyr_idxs, final_level_idxs)
+        if do_ori:
+            LAFs = self.getOrientation(LAFs, final_pyr_idxs, final_level_idxs)
+            pyr_inv_idxs = get_inverted_pyr_index(self.scale_pyr, final_pyr_idxs, final_level_idxs)
         #patches = extract_patches_from_pyramid_with_inv_index(scale_pyr, pyr_inv_idxs, LAFs, PS = self.PS)
         #patches = extract_patches(x, LAFs, PS = self.PS)
         #print time.time() - t, len(LAFs), ' patches extraction'
