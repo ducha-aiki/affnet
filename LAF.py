@@ -6,6 +6,7 @@ from numpy.linalg import inv
 from scipy.linalg import schur, sqrtm
 import torch
 from  torch.autograd import Variable
+import torch.nn.functional as F
 
 ##########numpy
 def invSqrt(a,b,c):
@@ -192,12 +193,44 @@ def generate_patch_grid_from_normalized_LAFs(LAFs, w, h, PS):
     grid[:,:,:,1] = 2.0 * grid[:,:,:,1] / float(h)  - 1.0     
     return grid
     
-def extract_patches(img, LAFs, PS = 32):
+def batched_grid_apply(img, grid, batch_size):
+    n_patches = len(grid)
+    if n_patches > batch_size:
+        bs = batch_size
+        n_batches = n_patches / bs + 1
+        for batch_idx in range(n_batches):
+            st = batch_idx * bs
+            if batch_idx == n_batches - 1:
+                if (batch_idx + 1) * bs > n_patches:
+                    end = n_patches
+                else:
+                    end = (batch_idx + 1) * bs
+            else:
+                end = (batch_idx + 1) * bs
+            if st >= end:
+                continue
+            if batch_idx == 0:
+                first_batch_out = F.grid_sample(img.expand(end - st, img.size(1), img.size(2), img.size(3)), grid[st:end, :,:,:])# kwargs)
+                out_size = torch.Size([n_patches] + list(first_batch_out.size()[1:]))
+                out = Variable(torch.zeros(out_size));
+                if img.is_cuda:
+                    out = out.cuda()
+                out[st:end] = first_batch_out
+            else:
+                out[st:end,:,:] = F.grid_sample(img.expand(end - st, img.size(1), img.size(2), img.size(3)), grid[st:end, :,:,:])
+        return out
+    else:
+        return F.grid_sample(img.expand(grid.size(0), img.size(1), img.size(2), img.size(3)), grid)
+    
+def extract_patches(img, LAFs, PS = 32, bs = None):
     w = img.size(3)
     h = img.size(2)
     ch = img.size(1)
     grid = generate_patch_grid_from_normalized_LAFs(LAFs, float(w),float(h), PS)
-    return torch.nn.functional.grid_sample(img.expand(grid.size(0), ch, h, w),  grid)  
+    if bs is None:
+        return torch.nn.functional.grid_sample(img.expand(grid.size(0), ch, h, w),  grid)  
+    else:
+        return batched_grid_apply(img, grid, bs)
 
 def get_pyramid_inverted_index_for_LAFs(LAFs, PS, sigmas):
     return
