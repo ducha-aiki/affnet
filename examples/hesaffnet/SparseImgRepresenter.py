@@ -18,6 +18,7 @@ class ScaleSpaceAffinePatchExtractor(nn.Module):
                  patch_size = 32,
                  mrSize = 3.0,
                  nlevels = 3,
+                 threshold = 0,
                  num_Baum_iters = 0,
                  init_sigma = 1.6,
                  RespNet = None, OriNet = None, AffNet = None):
@@ -26,6 +27,12 @@ class ScaleSpaceAffinePatchExtractor(nn.Module):
         self.PS = patch_size
         self.b = border;
         self.num = num_features
+        self.th = threshold
+        if threshold > 0:
+            print('Threshold is set to ', threshold, 'num_features is ignored')
+            self.num = -1
+        else:
+            print('Threshold is not set, max num_features = ', self.num, ' will be outputed')
         self.nlevels = nlevels
         self.num_Baum_iters = num_Baum_iters
         self.init_sigma = init_sigma
@@ -68,14 +75,14 @@ class ScaleSpaceAffinePatchExtractor(nn.Module):
                                      border = self.b, mrSize = self.mrSize)
             for level_idx in range(1, len(octave)-1):
                 if cur is None:
-                    low = self.RespNet(octave[level_idx - 1], (sigmas_oct[level_idx - 1 ]))
+                    low = torch.clamp(self.RespNet(octave[level_idx - 1], (sigmas_oct[level_idx - 1 ]))- self.th, min = 0)
                 else:
                     low = cur
                 if high is None:
-                    cur = self.RespNet(octave[level_idx ], (sigmas_oct[level_idx ]))
+                    cur = torch.clamp(self.RespNet(octave[level_idx ], (sigmas_oct[level_idx ]))- self.th, min = 0)
                 else:
                     cur = high
-                high = self.RespNet(octave[level_idx + 1], (sigmas_oct[level_idx + 1 ]))
+                high = torch.clamp(self.RespNet(octave[level_idx + 1], (sigmas_oct[level_idx + 1 ]))- self.th, min = 0)
                 top_resp, aff_matrix, octaveMap_current  = nms_f(low, cur, high,
                                                                  num_features = num_features,
                                                                  octaveMap = octaveMap,

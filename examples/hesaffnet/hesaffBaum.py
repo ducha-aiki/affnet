@@ -23,6 +23,8 @@ from Utils import line_prepender
 from architectures import AffNetFast
 from HandCraftedModules import AffineShapeEstimator
 USE_CUDA = False
+th = 28.41 # default threshold for HessianAffine 
+th = -1
 try:
     input_img_fname = sys.argv[1]
     output_fname = sys.argv[2]
@@ -37,7 +39,7 @@ img = np.mean(np.array(img), axis = 2)
 var_image = torch.autograd.Variable(torch.from_numpy(img.astype(np.float32)), volatile = True)
 var_image_reshape = var_image.view(1, 1, var_image.size(0),var_image.size(1))
 
-HA = ScaleSpaceAffinePatchExtractor( mrSize = 5.192, num_features = nfeats, border = 5, num_Baum_iters = 16, AffNet = AffineShapeEstimator(patch_size=19))
+HA = ScaleSpaceAffinePatchExtractor( mrSize = 5.192, num_features = nfeats, border = 5, num_Baum_iters = 16, threshold = th, AffNet = AffineShapeEstimator(patch_size=19))
 if USE_CUDA:
     HA = HA.cuda()
     var_image_reshape = var_image_reshape.cuda()

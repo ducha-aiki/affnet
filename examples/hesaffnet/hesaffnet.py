@@ -22,7 +22,8 @@ from LAF import denormalizeLAFs, LAFs2ell, abc2A
 from Utils import line_prepender
 from architectures import AffNetFast
 USE_CUDA = False
-
+th = 28.41 # default threshold for HessianAffine 
+th = -1
 try:
     input_img_fname = sys.argv[1]
     output_fname = sys.argv[2]
@@ -46,7 +47,7 @@ AffNetPix.load_state_dict(checkpoint['state_dict'])
 
 AffNetPix.eval()
     
-HA = ScaleSpaceAffinePatchExtractor( mrSize = 5.192, num_features = nfeats, border = 5, num_Baum_iters = 1, AffNet = AffNetPix)
+HA = ScaleSpaceAffinePatchExtractor( mrSize = 5.192, num_features = nfeats, border = 5, num_Baum_iters = 1, threshold = th,  AffNet = AffNetPix)
 if USE_CUDA:
     HA = HA.cuda()
     var_image_reshape = var_image_reshape.cuda()
