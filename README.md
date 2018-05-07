@@ -3,6 +3,10 @@ CNN-based affine shape estimator.
 
 AffNet model implementation in PyTorch for TechReport "[Learning Discriminative Affine Regions via Discriminability](https://arxiv.org/abs/1711.06704)"
 
+**NEW! Code, used for feature extraction in the paper, available at** https://github.com/ducha-aiki/mods-light-zmq 
+
+
+
 AffNet generates up to twice more correspondeces compared to Baumberg iterations
 ![HesAff](imgs/graf16HesAff.jpg)
 ![HesAffNet](imgs/graf16HesAffNet.jpg)
@@ -15,6 +19,7 @@ AffNet generates up to twice more correspondeces compared to Baumberg iterations
 | [HesAff](https://github.com/perdoch/hesaff) + [RootSIFT](http://ieeexplore.ieee.org/document/6248018/)    | 55.1  |  63.0 | 78.4 | 88.0 |
 | [HesAff](https://github.com/perdoch/hesaff) + [HardNet++](https://github.com/DagnyT/hardnet)   | 60.8  |  69.6 | 84.5 | 88.3 |
 | HesAffNet + [HardNet++](https://github.com/DagnyT/hardnet)   | **68.3**  |  **77.8** | **89.0** | **89.5** |
+
 
 ## Datasets and Training
 
