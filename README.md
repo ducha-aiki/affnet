@@ -28,8 +28,9 @@ git clone https://github.com/ducha-aiki/affnet
 
 ## Paper figures reproduction
 
-To reproduce Figure 1 in paper, run [notebook]('examples/toy_example_figure1/Figure1.ipynb')
-To reproduce Figure 2-3 in paper, run notebooks [here]('examples/direct_shape_optimization')
+To reproduce Figure 1 in paper, run [notebook](examples/toy_example_figure1/Figure1.ipynb)
+
+To reproduce Figure 2-3 in paper, run notebooks [here](examples/direct_shape_optimization)
 
 
 ```bash
@@ -74,7 +75,7 @@ x y a b c
 
 ## WBS example 
 
-[notebook]('examples/hesaffnet/WBS demo.ipynb')
+[notebook](examples/hesaffnet/WBS demo.ipynb)
 
 ## Citation
 
