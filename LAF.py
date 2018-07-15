@@ -7,7 +7,6 @@ from scipy.linalg import schur, sqrtm
 import torch
 from  torch.autograd import Variable
 import torch.nn.functional as F
-
 ##########numpy
 def invSqrt(a,b,c):
     eps = 1e-12 
@@ -33,6 +32,124 @@ def invSqrt(a,b,c):
     new_c = t*t*x + r*r *z
 
     return new_a, new_b, new_c
+def LAFs2ellT(LAFs):
+    ellipses = torch.zeros((len(LAFs),5))
+    if LAFs.is_cuda:
+        ellipses = ellipses.cuda()
+    scale = torch.sqrt(LAFs[:,0,0]*LAFs[:,1,1]  - LAFs[:,0,1]*LAFs[:,1, 0] + 1e-10)#.view(-1,1,1)
+    unscaled_As = LAFs[:,0:2,0:2] / scale.view(-1,1,1).repeat(1,2,2)
+    u, W, v = bsvd2x2(unscaled_As)
+    #W = 1.0 / ((W *scale.view(-1,1,1).repeat(1,2,2))**2) 
+    W[:,0,0] = 1.0 /  (scale*scale*W[:,0,0]**2 )
+    W[:,1,1] = 1.0 /  (scale*scale*W[:,1,1]**2 )
+    A = torch.bmm(torch.bmm(u,W), u.permute(0,2,1))
+    ellipses[:,0] = LAFs[:,0,2]
+    ellipses[:,1] = LAFs[:,1,2]
+    ellipses[:,2] = A[:,0,0]
+    ellipses[:,3] = A[:,0,1]
+    ellipses[:,4] = A[:,1,1]
+    return ellipses
+def invSqrtTorch(a,b,c):
+    eps = 1e-12
+    mask = (b != 0).float()
+    r1 = mask * (c - a) / (2. * b + eps)
+    t1 = torch.sign(r1) / (torch.abs(r1) + torch.sqrt(1. + r1*r1));
+    r = 1.0 / torch.sqrt( 1. + t1*t1)
+    t = t1*r;
+    r = r * mask + 1.0 * (1.0 - mask);
+    t = t * mask;
+
+    x = 1. / torch.sqrt( r*r*a - 2.0*r*t*b + t*t*c)
+    z = 1. / torch.sqrt( t*t*a + 2.0*r*t*b + r*r*c)
+
+    d = torch.sqrt( x * z)
+
+    x = x / d
+    z = z / d
+
+    new_a = r*r*x + t*t*z
+    new_b = -r*t*x + t*r*z
+    new_c = t*t*x + r*r *z
+
+    return new_a, new_b, new_c,
+    
+def ells2LAFsT(ells):
+    LAFs = torch.zeros((len(ells), 2,3))
+    LAFs[:,0,2] = ells[:,0]
+    LAFs[:,1,2] = ells[:,1]
+    a = ells[:,2]
+    b = ells[:,3]
+    c = ells[:,4]
+    sc = torch.sqrt(torch.sqrt(a*c - b*b + 1e-12))
+    ia,ib,ic = invSqrtTorch(a,b,c)  #because sqrtm returns ::-1, ::-1 matrix, don`t know why 
+    A = torch.cat([torch.cat([(ia/sc).view(-1,1,1), (ib/sc).view(-1,1,1)], dim = 2),
+                   torch.cat([(ib/sc).view(-1,1,1), (ic/sc).view(-1,1,1)], dim = 2)], dim = 1)
+    sc = torch.sqrt(torch.abs(A[:,0,0] * A[:,1,1] - A[:,1,0] * A[:,0,1]))
+    LAFs[:,0:2,0:2] = rectifyAffineTransformationUpIsUp(A / sc.view(-1,1,1).repeat(1,2,2)) * sc.view(-1,1,1).repeat(1,2,2)
+    return LAFs
+
+def LAFs_to_H_frames(aff_pts):
+    H3_x = torch.Tensor([0, 0, 1 ]).unsqueeze(0).unsqueeze(0).repeat(aff_pts.size(0),1,1);
+    if aff_pts.is_cuda:
+        H3_x = H3_x.cuda()
+    return torch.cat([aff_pts, H3_x], dim = 1)
+
+
+def checkTouchBoundary(LAFs):
+    pts = torch.FloatTensor([[-1, -1, 1, 1], [-1, 1, -1, 1], [1, 1, 1, 1]]).unsqueeze(0)
+    if LAFs.is_cuda:
+        pts = pts.cuda()
+    out_pts =  torch.bmm(LAFs_to_H_frames(LAFs),pts.expand(LAFs.size(0),3,4))[:,:2,:]
+    good_points = 1 -(((out_pts > 1.0) +  (out_pts < 0.0)).sum(dim=1).sum(dim=1) > 0)
+    return good_points
+
+def bsvd2x2(As):
+    Su = torch.bmm(As,As.permute(0,2,1))
+    phi = 0.5 * torch.atan2(Su[:,0,1] + Su[:,1,0] + 1e-12, Su[:,0,0] - Su[:,1,1] + 1e-12)
+    Cphi = torch.cos(phi)
+    Sphi = torch.sin(phi)
+    U = torch.zeros(As.size(0),2,2)
+    if As.is_cuda:
+        U = U.cuda()
+    U[:,0,0] = Cphi
+    U[:,1,1] = Cphi
+    U[:,0,1] = -Sphi
+    U[:,1,0] = Sphi
+    Sw = torch.bmm(As.permute(0,2,1),As)
+    theta = 0.5 * torch.atan2(Sw[:,0,1] + Sw[:,1,0] + 1e-12, Sw[:,0,0] - Sw[:,1,1] + 1e-12)
+    Ctheta = torch.cos(theta)
+    Stheta = torch.sin(theta)
+    W = torch.zeros(As.size(0),2,2)
+    if As.is_cuda:
+        W = W.cuda()
+    W[:,0,0] = Ctheta
+    W[:,1,1] = Ctheta
+    W[:,0,1] = -Stheta
+    W[:,1,0] = Stheta
+    SUsum = Su[:,0,0] + Su[:,1,1]
+    SUdif = torch.sqrt((Su[:,0,0] - Su[:,1,1])**2 + 4 * Su[:,0,1]*Su[:,1,0] + 1e-12)
+    if As.is_cuda:
+        SIG = torch.zeros(As.size(0),2,2).cuda()
+        SIG[:,0,0] = torch.sqrt((SUsum+SUdif)/2.0)
+        SIG[:,1,1] = torch.sqrt((SUsum-SUdif)/2.0)
+    else:
+        SIG = torch.zeros(As.size(0),2,2)
+        SIG[:,0,0] = torch.sqrt((SUsum+SUdif)/2.0)
+        SIG[:,1,1] = torch.sqrt((SUsum-SUdif)/2.0)
+    S = torch.bmm(torch.bmm(U.permute(0,2,1),As),W)
+    C = torch.sign(S)
+    C[:,0,1] = 0
+    C[:,1,0] = 0
+    V = torch.bmm(W,C)
+    return (U,SIG,V)
+
+def getLAFelongation(LAFs):
+    u,s,v = bsvd2x2(LAFs[:,:2,:2])
+    return torch.max(s[:,0,0],s[:,1,1]) / torch.min(s[:,0,0],s[:,1,1])
+
+def getNumCollapsed(LAFs, th = 10.0):
+    el = getLAFelongation(LAFs)
+    return (el > th).float().sum()
 
 def Ell2LAF(ell):
     A23 = np.zeros((2,3))
@@ -122,14 +239,17 @@ def LAFs2ell(in_LAFs):
         ellipses[i,4] = A[1,1]
     return ellipses
 
-def visualize_LAFs(img, LAFs):
+def visualize_LAFs(img, LAFs, color = 'r', show = False, save_to = None):
     work_LAFs = convertLAFs_to_A23format(LAFs)
     plt.figure()
     plt.imshow(255 - img)
     for i in range(len(work_LAFs)):
         ell = LAF2pts(work_LAFs[i,:,:])
-        plt.plot( ell[:,0], ell[:,1], 'r')
-    plt.show()
+        plt.plot( ell[:,0], ell[:,1], color)
+    if show:
+        plt.show()
+    if save_to is not None:
+        plt.savefig(save_to)
     return 
 
 ####pytorch
@@ -140,7 +260,7 @@ def get_normalized_affine_shape(tilt, angle_in_radians):
     tilt_A = Variable(torch.eye(2).view(1,2,2).repeat(num,1,1))
     if tilt.is_cuda:
         tilt_A = tilt_A.cuda()
-    tilt_A[:,0:1,0:1] = tilt;
+    tilt_A[:,0,0] = tilt.view(-1);
     rotmat = get_rotation_matrix(angle_in_radians)
     out_A = rectifyAffineTransformationUpIsUp(torch.bmm(rotmat, torch.bmm(tilt_A, rotmat)))
     #re_scale = (1.0/torch.sqrt((out_A **2).sum(dim=1).max(dim=1)[0])) #It is heuristic to for keeping scale change small
@@ -164,7 +284,11 @@ def rectifyAffineTransformationUpIsUp(A):
                         (det / b2a2).contiguous().view(-1,1,1)], dim = 2)
     return torch.cat([A1_ell, A2_ell], dim = 1)
 
-
+def rectifyAffineTransformationUpIsUpFullyConv(A):#A is (n,4,h,w) tensor
+    det = torch.sqrt(torch.abs(A[:,0:1,:,:]*A[:,3:4,:,:] - A[:,1:2,:,:]*A[:,2:3,:,:] + 1e-10))
+    b2a2 = torch.sqrt(A[:,1:2,:,:] * A[:,1:2,:,:] + A[:,0:1,:,:] * A[:,0:1,:,:])
+    return torch.cat([(b2a2 / det).contiguous(),0 * det.contiguous(),
+                      (A[:,3:4,:,:]*A[:,1:2,:,:]+A[:,2:3,:,:]*A[:,0:1,:,:])/(b2a2*det),(det / b2a2).contiguous()], dim = 1)
 
 def abc2A(a,b,c, normalize = False):
     A1_ell = torch.cat([a.view(-1,1,1), b.view(-1,1,1)], dim = 2)
@@ -188,12 +312,12 @@ def generate_patch_grid_from_normalized_LAFs(LAFs, w, h, PS):
     coef[0,1,2] = h
     if LAFs.is_cuda:
         coef = coef.cuda()
-    grid = torch.nn.functional.affine_grid(LAFs * Variable(coef.expand(num_lafs,2,3)), torch.Size((num_lafs,1,PS,PS)))
+    grid = F.affine_grid(LAFs * Variable(coef.expand(num_lafs,2,3)), torch.Size((num_lafs,1,PS,PS)))
     grid[:,:,:,0] = 2.0 * grid[:,:,:,0] / float(w)  - 1.0
     grid[:,:,:,1] = 2.0 * grid[:,:,:,1] / float(h)  - 1.0     
     return grid
-    
-def batched_grid_apply(img, grid, batch_size):
+
+def batched_grid_apply(img, grid, batch_size = 32):
     n_patches = len(grid)
     if n_patches > batch_size:
         bs = batch_size
@@ -210,19 +334,28 @@ def batched_grid_apply(img, grid, batch_size):
             if st >= end:
                 continue
             if batch_idx == 0:
-                first_batch_out = F.grid_sample(img.expand(end - st, img.size(1), img.size(2), img.size(3)), grid[st:end, :,:,:])# kwargs)
+                if img.size(0) != grid.size(0):
+                    first_batch_out = F.grid_sample(img.expand(end - st, img.size(1), img.size(2), img.size(3)), grid[st:end, :,:,:])# kwargs)
+                else:
+                    first_batch_out = F.grid_sample(img[st:end], grid[st:end, :,:,:])# kwargs)
                 out_size = torch.Size([n_patches] + list(first_batch_out.size()[1:]))
-                out = Variable(torch.zeros(out_size));
+                out = torch.zeros(out_size);
                 if img.is_cuda:
                     out = out.cuda()
                 out[st:end] = first_batch_out
             else:
-                out[st:end,:,:] = F.grid_sample(img.expand(end - st, img.size(1), img.size(2), img.size(3)), grid[st:end, :,:,:])
+                if img.size(0) != grid.size(0):
+                    out[st:end,:,:] = F.grid_sample(img.expand(end - st, img.size(1), img.size(2), img.size(3)), grid[st:end, :,:,:])
+                else:
+                    out[st:end,:,:] = F.grid_sample(img[st:end], grid[st:end, :,:,:])
         return out
     else:
-        return F.grid_sample(img.expand(grid.size(0), img.size(1), img.size(2), img.size(3)), grid)
-    
-def extract_patches(img, LAFs, PS = 32, bs = None):
+        if img.size(0) != grid.size(0):
+            return F.grid_sample(img.expand(grid.size(0), img.size(1), img.size(2), img.size(3)), grid)
+        else:
+            return F.grid_sample(img, grid)
+
+def extract_patches(img, LAFs, PS = 32, bs = 32):
     w = img.size(3)
     h = img.size(2)
     ch = img.size(1)
@@ -231,7 +364,6 @@ def extract_patches(img, LAFs, PS = 32, bs = None):
         return torch.nn.functional.grid_sample(img.expand(grid.size(0), ch, h, w),  grid)  
     else:
         return batched_grid_apply(img, grid, bs)
-
 def get_pyramid_inverted_index_for_LAFs(LAFs, PS, sigmas):
     return
 
@@ -248,7 +380,7 @@ def extract_patches_from_pyramid_with_inv_index(scale_pyramid, pyr_inv_idxs, LAF
                     continue
                 cur_lvl_idxs = cur_lvl_idxs.view(-1)
                 #print i,j,cur_lvl_idxs.shape
-                patches[cur_lvl_idxs,:,:,:] = extract_patches(scale_pyramid[i][j], LAFs[cur_lvl_idxs, :,:], PS )
+                patches[cur_lvl_idxs,:,:,:] = extract_patches(scale_pyramid[i][j], LAFs[cur_lvl_idxs, :,:], PS, 32 )
     return patches
 
 def get_inverted_pyr_index(scale_pyr, pyr_idxs, level_idxs):
@@ -259,7 +391,7 @@ def get_inverted_pyr_index(scale_pyr, pyr_idxs, level_idxs):
         cur_idxs = pyr_idxs == i #torch.nonzero((pyr_idxs == i).data)
         for j in range(0, len(scale_pyr[i])):
             cur_lvl_idxs = torch.nonzero(((level_idxs == j) * cur_idxs).data)
-            if len(cur_lvl_idxs.size()) == 0:
+            if cur_lvl_idxs.size(0) == 0:
                 pyr_inv_idxs[i].append(None)
             else:
                 pyr_inv_idxs[i].append(cur_lvl_idxs.squeeze())
@@ -295,6 +427,14 @@ def sc_y_x2LAFs(sc_y_x):
     if sc_y_x.is_cuda:
         base_LAF = base_LAF.cuda()
     base_A = Variable(base_LAF, requires_grad=False)
+    A = sc_y_x[:,:1].unsqueeze(1).expand_as(base_A) * base_A
+    LAFs  = torch.cat([A,
+                       torch.cat([sc_y_x[:,2:].unsqueeze(-1),
+                                    sc_y_x[:,1:2].unsqueeze(-1)], dim=1)], dim = 2)
+        
+    return LAFs
+def sc_y_x_and_A2LAFs(sc_y_x, A_flat):
+    base_A = A_flat.view(-1,2,2)
     A = sc_y_x[:,:1].unsqueeze(1).expand_as(base_A) * base_A
     LAFs  = torch.cat([A,
                        torch.cat([sc_y_x[:,2:].unsqueeze(-1),

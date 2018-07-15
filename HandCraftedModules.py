@@ -5,7 +5,7 @@ from torch.autograd import Variable
 import math
 import numpy as np
 from Utils import  GaussianBlur, CircularGaussKernel
-from LAF import abc2A,rectifyAffineTransformationUpIsUp, sc_y_x2LAFs
+from LAF import abc2A,rectifyAffineTransformationUpIsUp, sc_y_x2LAFs,sc_y_x_and_A2LAFs
 from Utils import generate_2dgrid, generate_2dgrid, generate_3dgrid
 from Utils import zero_response_at_border
 
@@ -129,7 +129,7 @@ class AffineShapeEstimator(nn.Module):
         a, b, c, l1, l2 = self.invSqrt(a1,b1,c1)
         rat1 = l1/l2
         mask = (torch.abs(rat1) <= 6.).float().view(-1);
-        return rectifyAffineTransformationUpIsUp(abc2A(a,b,c)), mask
+        return rectifyAffineTransformationUpIsUp(abc2A(a,b,c))#, mask
 class OrientationDetector(nn.Module):
     def __init__(self,
                 mrSize = 3.0, patch_size = None):
@@ -249,20 +249,89 @@ class NMS3dAndComposeA(nn.Module):
         else:
             nmsed_resp = zero_response_at_border(self.NMS3d(resp3d.unsqueeze(1)).squeeze(1)[:,1:2,:,:], mrSize_border)
         
-        num_of_nonzero_responces = (nmsed_resp > 0).float().sum().data[0]
-        if (num_of_nonzero_responces == 0):
+        num_of_nonzero_responces = (nmsed_resp > 0).float().sum().item()#data[0]
+        if (num_of_nonzero_responces <= 1):
             return None,None,None
         if octaveMap is not None:
             octaveMap = (octaveMap.float() + nmsed_resp.float()).byte()
         
         nmsed_resp = nmsed_resp.view(-1)
         if (num_features > 0) and (num_features < num_of_nonzero_responces):
-            nmsed_resp, idxs = torch.topk(nmsed_resp, k = num_features);
+            nmsed_resp, idxs = torch.topk(nmsed_resp, k = num_features, dim = 0);
         else:
             idxs = nmsed_resp.data.nonzero().squeeze()
             nmsed_resp = nmsed_resp[idxs]
         #Get point coordinates grid
         
+        if type(scales) is not list:
+            self.grid = generate_3dgrid(3,self.ks,self.ks)
+        else:
+            self.grid = generate_3dgrid(scales,self.ks,self.ks)
+        self.grid = Variable(self.grid.t().contiguous().view(3,3,3,3), requires_grad=False)
+        if self.spatial_grid is None:
+            self.spatial_grid = generate_2dgrid(low.size(2), low.size(3), False).view(1, low.size(2), low.size(3),2).permute(3,1, 2, 0)
+            self.spatial_grid = Variable(self.spatial_grid)
+        if self.is_cuda:
+            self.spatial_grid = self.spatial_grid.cuda()
+            self.grid_ones = self.grid_ones.cuda()
+            self.grid = self.grid.cuda()
+        #residual_to_patch_center
+        sc_y_x = F.conv2d(resp3d, self.grid,
+                                padding = 1) / (F.conv2d(resp3d, self.grid_ones, padding = 1) + 1e-8)
+        
+        ##maxima coords
+        sc_y_x[0,1:,:,:] = sc_y_x[0,1:,:,:] + self.spatial_grid[:,:,:,0]
+        sc_y_x = sc_y_x.view(3,-1).t()
+        sc_y_x = sc_y_x[idxs,:]
+        
+        min_size = float(min((cur.size(2)), cur.size(3)))
+        sc_y_x[:,0] = sc_y_x[:,0] / min_size
+        sc_y_x[:,1] = sc_y_x[:,1] / float(cur.size(2))
+        sc_y_x[:,2] = sc_y_x[:,2] / float(cur.size(3))
+        return nmsed_resp, sc_y_x2LAFs(sc_y_x), octaveMap
+class NMS3dAndComposeAAff(nn.Module):
+    def __init__(self, w = 0, h = 0, kernel_size = 3, threshold = 0, scales = None, border = 3, mrSize = 1.0):
+        super(NMS3dAndComposeAAff, self).__init__()
+        self.eps = 1e-7
+        self.ks = 3
+        self.th = threshold
+        self.cube_idxs = []
+        self.border = border
+        self.mrSize = mrSize
+        self.beta = 1.0
+        self.grid_ones = Variable(torch.ones(3,3,3,3), requires_grad=False)
+        self.NMS3d = NMS3d(kernel_size, threshold)
+        if (w > 0) and (h > 0):
+            self.spatial_grid = generate_2dgrid(h, w, False).view(1, h, w,2).permute(3,1, 2, 0)
+            self.spatial_grid = Variable(self.spatial_grid)
+        else:
+            self.spatial_grid = None
+        return
+    def forward(self, low, cur, high, num_features = 0, octaveMap = None, scales = None, aff_resp = None):
+        assert low.size() == cur.size() == high.size()
+        #Filter responce map
+        self.is_cuda = low.is_cuda;
+        resp3d = torch.cat([low,cur,high], dim = 1)
+        
+        mrSize_border = int(self.mrSize);
+        if octaveMap is not None:
+            nmsed_resp = zero_response_at_border(self.NMS3d(resp3d.unsqueeze(1)).squeeze(1)[:,1:2,:,:], mrSize_border) * (1. - octaveMap.float())
+        else:
+            nmsed_resp = zero_response_at_border(self.NMS3d(resp3d.unsqueeze(1)).squeeze(1)[:,1:2,:,:], mrSize_border)
+        
+        num_of_nonzero_responces = (nmsed_resp > 0).float().sum().item()#data[0]
+        if (num_of_nonzero_responces <= 1):
+            return None,None,None
+        if octaveMap is not None:
+            octaveMap = (octaveMap.float() + nmsed_resp.float()).byte()
+        
+        nmsed_resp = nmsed_resp.view(-1)
+        if (num_features > 0) and (num_features < num_of_nonzero_responces):
+            nmsed_resp, idxs = torch.topk(nmsed_resp, k = num_features, dim = 0);
+        else:
+            idxs = nmsed_resp.data.nonzero().squeeze()
+            nmsed_resp = nmsed_resp[idxs]
+        #Get point coordinates grid
         if type(scales) is not list:
             self.grid = generate_3dgrid(3,self.ks,self.ks)
         else:
@@ -284,9 +353,11 @@ class NMS3dAndComposeA(nn.Module):
         sc_y_x[0,1:,:,:] = sc_y_x[0,1:,:,:] + self.spatial_grid[:,:,:,0]
         sc_y_x = sc_y_x.view(3,-1).t()
         sc_y_x = sc_y_x[idxs,:]
-        
+        if aff_resp is not None:
+            A_matrices = aff_resp.view(4,-1).t()[idxs,:]        
         min_size = float(min((cur.size(2)), cur.size(3)))
+        
         sc_y_x[:,0] = sc_y_x[:,0] / min_size
         sc_y_x[:,1] = sc_y_x[:,1] / float(cur.size(2))
         sc_y_x[:,2] = sc_y_x[:,2] / float(cur.size(3))
-        return nmsed_resp, sc_y_x2LAFs(sc_y_x), octaveMap
+        return nmsed_resp, sc_y_x_and_A2LAFs(sc_y_x,A_matrices), octaveMap

@@ -27,48 +27,36 @@ class L1Norm(nn.Module):
         x= x / norm.expand_as(x)
         return x
 
-class HardNetNarELU(nn.Module):
+class HardTFeatNet(nn.Module):
     """TFeat model definition
     """
 
-    def __init__(self,sm):
-        super(HardNetNarELU, self).__init__()
+    def __init__(self, sm):
+        super(HardTFeatNet, self).__init__()
 
         self.features = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=3, padding=1),
-            nn.ELU(),
-            nn.Conv2d(16, 16, kernel_size=3, padding=1),
-            nn.ELU(),
-            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
-            nn.ELU(),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1),
-            nn.ELU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2,padding=1),
-            nn.ELU(),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.ELU()
+            nn.Conv2d(1, 32, kernel_size=7),
+            nn.Tanh(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(32, 64, kernel_size=6),
+            nn.Tanh()
         )
         self.classifier = nn.Sequential(
             nn.Dropout(0.1),
             nn.Conv2d(64, 128, kernel_size=8),
-            nn.BatchNorm2d(128, affine=False))
+            nn.Tanh())
         self.SIFT = sm
-        return
-
     def input_norm(self,x):
         flat = x.view(x.size(0), -1)
         mp = torch.mean(flat, dim=1)
         sp = torch.std(flat, dim=1) + 1e-7
-        #print(sp)
         return (x - mp.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(x)) / sp.unsqueeze(-1).unsqueeze(-1).unsqueeze(1).expand_as(x)
-
+    
     def forward(self, input):
-        x_features = self.features(input)#self.input_norm(input))
-        #x = self.classifier[1](x_features)
-        x = nn.AdaptiveAvgPool2d(1)(x_features).view(x_features.size(0), -1)
-        return x
-        #return L2Norm()(x)
-
+        x_features = self.features(self.input_norm(input))
+        x = x_features.view(x_features.size(0), -1)
+        x = self.classifier(x_features)
+        return L2Norm()(x.view(x.size(0), -1))
 
 class HardNet(nn.Module):
     """HardNet model definition

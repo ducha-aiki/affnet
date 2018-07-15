@@ -1,0 +1,5 @@
+# Development files
+*.swp
+*.pyc
+*.npy
+*.t7

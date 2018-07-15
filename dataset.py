@@ -191,22 +191,27 @@ class HPatchesDM(data.Dataset):
             torch.save(dataset, f)
         return
 class TotalDatasetsLoader(data.Dataset):
-
     def __init__(self, datasets_path, train = True, transform = None, batch_size = None, n_triplets = 5000000, fliprot = False, *arg, **kw):
         super(TotalDatasetsLoader, self).__init__()
-
         datasets_path = [os.path.join(datasets_path, dataset) for dataset in os.listdir(datasets_path)]
-
-        datasets = [torch.load(dataset) for dataset in datasets_path]
-
-        data, labels = datasets[0][0], datasets[0][1]
-
-        for i in range(1,len(datasets)):
-            data = torch.cat([data,datasets[i][0]])
-            labels = torch.cat([labels, datasets[i][1]+torch.max(labels)+1])
-
-        del datasets
-
+        start = True
+        for dataset_p in datasets_path:
+            d = torch.load(dataset_p)
+            if start:
+                data = d[0]
+                labels = d[1]
+                start = False
+            else:
+                data = torch.cat([data, d[0]])
+                labels = torch.cat([labels, d[1]+ torch.max(labels) + 1])
+        #datasets = [torch.load(dataset) for dataset in datasets_path]
+        #data, labels = datasets[0][0], datasets[0][1]
+        #
+        #for i in range(1,len(datasets)):
+        #    data = torch.cat([data,datasets[i][0]])
+        #    labels = torch.cat([labels, datasets[i][1]+torch.max(labels)+1])
+        #
+        #del datasets
         self.data, self.labels = data, labels
         self.transform = transform
         self.train = train
@@ -215,10 +220,10 @@ class TotalDatasetsLoader(data.Dataset):
         self.fliprot = fliprot
         if self.train:
                 print('Generating {} triplets'.format(self.n_triplets))
-                self.triplets = self.generate_triplets(self.labels, self.n_triplets, self.batch_size)
+                self.pairs = self.generate_pairs(self.labels, self.n_triplets, self.batch_size)
 
 
-    def generate_triplets(self, labels, num_triplets, batch_size):
+    def generate_pairs(self, labels, num_triplets, batch_size):
             def create_indices(_labels):
                 inds = dict()
                 for idx, ind in enumerate(_labels):
@@ -226,24 +231,24 @@ class TotalDatasetsLoader(data.Dataset):
                         inds[ind] = []
                     inds[ind].append(idx)
                 return inds
-
             triplets = []
-            indices = create_indices(labels)
+            indices = create_indices(labels.numpy())
             unique_labels = np.unique(labels.numpy())
             n_classes = unique_labels.shape[0]
             # add only unique indices in batch
             already_idxs = set()
-
             for x in tqdm(range(num_triplets)):
                 if len(already_idxs) >= batch_size:
                     already_idxs = set()
-                c1 = np.random.randint(0, n_classes)
+                c1 = unique_labels[np.random.randint(0, n_classes)]
                 while c1 in already_idxs:
-                    c1 = np.random.randint(0, n_classes)
+                    c1 = unique_labels[np.random.randint(0, n_classes)]
                 already_idxs.add(c1)
-                c2 = np.random.randint(0, n_classes)
-                while c1 == c2:
-                    c2 = np.random.randint(0, n_classes)
+                try:
+                    y = indices[c1]
+                except:
+                    print indices.keys()
+                    sys.exit(0)
                 if len(indices[c1]) == 2:  # hack to speed up process
                     n1, n2 = 0, 1
                 else:
@@ -251,8 +256,7 @@ class TotalDatasetsLoader(data.Dataset):
                     n2 = np.random.randint(0, len(indices[c1]))
                     while n1 == n2:
                         n2 = np.random.randint(0, len(indices[c1]))
-                n3 = np.random.randint(0, len(indices[c2]))
-                triplets.append([indices[c1][n1], indices[c1][n2], indices[c2][n3]])
+                triplets.append([indices[c1][n1], indices[c1][n2]])
             return torch.LongTensor(np.array(triplets))
 
     def __getitem__(self, index):
@@ -262,9 +266,8 @@ class TotalDatasetsLoader(data.Dataset):
                     img = self.transform(img)
                 return img
 
-            t = self.triplets[index]
-            a, p, n = self.data[t[0]], self.data[t[1]], self.data[t[2]]
-
+            t = self.pairs[index]
+            a, p = self.data[t[0]], self.data[t[1]]
             img_a = transform_img(a)
             img_p = transform_img(p)
 
@@ -284,7 +287,7 @@ class TotalDatasetsLoader(data.Dataset):
 
     def __len__(self):
             if self.train:
-                return self.triplets.size(0)
+                return self.pairs.size(0)
 
 class TripletPhotoTour(dset.PhotoTour):
     """From the PhotoTour Dataset it generates triplet samples
@@ -336,8 +339,8 @@ class TripletPhotoTour(dset.PhotoTour):
 
         if self.train:
             print('Generating {} triplets'.format(self.n_triplets))
-            self.triplets = self.generate_triplets(self.labels, self.n_triplets)
-    def generate_triplets(self,labels, num_triplets):
+            self.pairs = self.generate_pairs(self.labels, self.n_triplets)
+    def generate_pairs(self,labels, num_triplets):
         def create_indices(_labels):
             inds = dict()
             for idx, ind in enumerate(_labels):
@@ -383,7 +386,7 @@ class TripletPhotoTour(dset.PhotoTour):
             img2 = transform_img(self.data[m[1]])
             return img1, img2, m[2]
 
-        t = self.triplets[index]
+        t = self.pairs[index]
         a, p, n = self.data[t[0]], self.data[t[1]], self.data[t[2]]
         img_a = transform_img(a)
         img_p = transform_img(p)
@@ -411,7 +414,7 @@ class TripletPhotoTour(dset.PhotoTour):
 
     def __len__(self):
         if self.train:
-            return self.triplets.size(0)
+            return self.pairs.size(0)
         else:
             return self.matches.size(0)
 

@@ -1,11 +1,8 @@
 # AffNet model implementation
 CNN-based affine shape estimator.
 
-AffNet model implementation in PyTorch for TechReport "[Learning Discriminative Affine Regions via Discriminability](https://arxiv.org/abs/1711.06704)"
-
-**NEW! Code, used for feature extraction in the paper, available at** https://github.com/ducha-aiki/mods-light-zmq 
-
-
+AffNet model implementation in PyTorch for ECCV2018 paper "[Repeatability Is Not Enough: Learning Discriminative Affine Regions via Discriminability](https://arxiv.org/abs/1711.06704)"
+arXiv will be updates in couple of weeks.
 
 AffNet generates up to twice more correspondeces compared to Baumberg iterations
 ![HesAff](imgs/graf16HesAff.jpg)
@@ -20,7 +17,6 @@ AffNet generates up to twice more correspondeces compared to Baumberg iterations
 | [HesAff](https://github.com/perdoch/hesaff) + [HardNet++](https://github.com/DagnyT/hardnet)   | 60.8  |  69.6 | 84.5 | 88.3 |
 | HesAffNet + [HardNet++](https://github.com/DagnyT/hardnet)   | **68.3**  |  **77.8** | **89.0** | **89.5** |
 
-
 ## Datasets and Training
 
 To download datasets and start learning affnet:
@@ -29,6 +25,18 @@ To download datasets and start learning affnet:
 git clone https://github.com/ducha-aiki/affnet
 ./run_me.sh
 ```
+
+## Paper figures reproduction
+
+To reproduce Figure 1 in paper, run [notebook]('examples/toy_example_figure1/Figure1.ipynb')
+To reproduce Figure 2-3 in paper, run notebooks [here]('examples/direct_shape_optimization')
+
+
+```bash
+git clone https://github.com/ducha-aiki/affnet
+./run_me.sh
+```
+
 
 ## Pre-trained models
 
@@ -64,14 +72,20 @@ output ells-affnet.txt is [Oxford affine](http://www.robots.ox.ac.uk/~vgg/resear
 x y a b c 
 ```
 
+## WBS example 
+
+[notebook]('examples/hesaffnet/WBS demo.ipynb')
+
 ## Citation
 
 Please cite us if you use this code:
 
 ```
-@article{AffNet2017,
+@inproceedings{AffNet2017,
  author = {Dmytro Mishkin, Filip Radenovic, Jiri Matas},
-    title = "{Learning Discriminative Affine Regions via Discriminability}",
-     year = 2017,
-    month = nov}
+    title = "{Repeatability Is Not Enough: Learning Discriminative Affine Regions via Discriminability}",
+    year = 2018,
+    month = sep,
+    booktitle = {Proceedings of ECCV}
+    }
 ```
