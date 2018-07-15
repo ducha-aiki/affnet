@@ -75,7 +75,9 @@ x y a b c
 
 ## WBS example 
 
-[notebook](examples/hesaffnet/WBS demo.ipynb)
+
+Example is in [notebook](examples/hesaffnet/WBS demo.ipynb)
+
 
 ## Citation
 
