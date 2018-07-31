@@ -2,7 +2,6 @@
 CNN-based affine shape estimator.
 
 AffNet model implementation in PyTorch for ECCV2018 paper "[Repeatability Is Not Enough: Learning Discriminative Affine Regions via Discriminability](https://arxiv.org/abs/1711.06704)"
-arXiv will be updates in couple of weeks.
 
 AffNet generates up to twice more correspondeces compared to Baumberg iterations
 ![HesAff](imgs/graf16HesAff.jpg)
@@ -29,6 +28,7 @@ git clone https://github.com/ducha-aiki/affnet
 ## Paper figures reproduction
 
 To reproduce Figure 1 in paper, run [notebook](examples/toy_example_figure1/Figure1.ipynb)
+
 
 To reproduce Figure 2-3 in paper, run notebooks [here](examples/direct_shape_optimization)
 
