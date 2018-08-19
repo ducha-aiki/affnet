@@ -94,7 +94,7 @@ parser.add_argument('--loss', type=str,
                     help='Variants: HardNet, HardNegC, PosDist, Geom')
 parser.add_argument('--arch', type=str,
                     default='AffNetFast',
-                    help='Variants: AffNetFast, AffNetSlow, AffNetFast4, AffNetFast4Rot')
+                    help='Variants: AffNetFast, AffNetFast4, AffNetFast4Rot')
 
 
 args = parser.parse_args()
@@ -385,7 +385,7 @@ if __name__ == '__main__':
     LOG_DIR = os.path.join(args.log_dir,suffix)
     if not os.path.isdir(LOG_DIR):
         os.makedirs(LOG_DIR)
-    from architectures import AffNetSlow, AffNetFast, AffNetFastScale, AffNetFast4, AffNetFast4RotNosc, AffNetFast52RotUp,AffNetFast52Rot,AffNetFast5Rot, AffNetFast4Rot, AffNetFast4Rot
+    from architectures import AffNetFast, AffNetFastScale, AffNetFast4, AffNetFast4RotNosc, AffNetFast52RotUp,AffNetFast52Rot,AffNetFast5Rot, AffNetFast4Rot, AffNetFast4Rot
     from architectures import AffNetFast2Par,AffNetFastBias
     if args.arch == 'AffNetFast':
         model = AffNetFast(PS=PS)
@@ -395,8 +395,6 @@ if __name__ == '__main__':
         model = AffNetFastScale(PS=PS)
     elif args.arch == 'AffNetFast2Par':
         model = AffNetFast2Par(PS=PS)
-    elif args.arch == 'AffNetSlow':
-        model = AffNetSlow(PS=PS)
     elif args.arch == 'AffNetFast4':
         model = AffNetFast4(PS=PS)
     elif args.arch == 'AffNetFast4Rot':

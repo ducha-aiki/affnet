@@ -349,7 +349,7 @@ class TripletPhotoTour(dset.PhotoTour):
                 inds[ind].append(idx)
             return inds
         triplets = []
-        indices = create_indices(labels)
+        indices = create_indices(labels.numpy())
         unique_labels = np.unique(labels.numpy())
         n_classes = unique_labels.shape[0]
         # add only unique indices in batch
