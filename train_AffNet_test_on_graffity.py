@@ -237,10 +237,10 @@ def train(train_loader, model, optimizer, epoch):
         adjust_learning_rate(optimizer)
         if batch_idx % args.log_interval == 0:
             pbar.set_description(
-                'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.4f}, {:.4f},{:.4f}'.format(
+                'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.4f},{:.4f}'.format(
                     epoch, batch_idx * len(data_a), len(train_loader.dataset),
                            100. * batch_idx / len(train_loader),
-                    float(loss.detach().cpu().numpy()), float(geom_dist.detach().cpu().numpy()), float(descr_dist.detach().cpu().numpy())))
+                    float(loss.detach().cpu().numpy()), float(descr_dist.detach().cpu().numpy())))
     torch.save({'epoch': epoch + 1, 'state_dict': model.state_dict()},
                '{}/checkpoint_{}.pth'.format(LOG_DIR,epoch))
 def load_grayscale_var(fname):
