@@ -91,7 +91,7 @@ parser.add_argument('--descriptor', type=str,
                     help='which descriptor distance is minimized. Variants: pixels, SIFT, HardNet')
 parser.add_argument('--loss', type=str,
                     default='HardNet',
-                    help='Variants: HardNet, HardNegC, PosDist, Geom')
+                    help='Variants: HardNet, HardNegC, PosDist')
 parser.add_argument('--arch', type=str,
                     default='AffNetFast',
                     help='Variants: AffNetFast, AffNetFast4, AffNetFast4Rot')
@@ -211,21 +211,21 @@ def train(train_loader, model, optimizer, epoch):
         if inv_rotmat_p is None:
             inv_rotmat_p = inv_rotmat_a
         out_a_aff, out_p_aff = model(data_a_aff_crop,True), model(data_p_aff_crop,True)
-        out_a_aff_back = torch.bmm(torch.bmm(out_a_aff, inv_TA_a),  inv_rotmat_a)
-        out_p_aff_back = torch.bmm(torch.bmm(out_p_aff, inv_TA_p),  inv_rotmat_p)
+        #out_a_aff_back = torch.bmm(torch.bmm(out_a_aff, inv_TA_a),  inv_rotmat_a)
+        #out_p_aff_back = torch.bmm(torch.bmm(out_p_aff, inv_TA_p),  inv_rotmat_p)
         ###### Get descriptors
         out_patches_a_crop = extract_and_crop_patches_by_predicted_transform(data_a_aff, out_a_aff, crop_size = model.PS)
         out_patches_p_crop = extract_and_crop_patches_by_predicted_transform(data_p_aff, out_p_aff, crop_size = model.PS)
         desc_a = descriptor(out_patches_a_crop)
         desc_p = descriptor(out_patches_p_crop)
         descr_dist =  torch.sqrt(((desc_a - desc_p)**2).view(data_a.size(0),-1).sum(dim=1) + 1e-6).mean()
-        geom_dist = torch.sqrt(((out_a_aff_back - out_p_aff_back)**2 ).view(-1,4).sum(dim=1) + 1e-8).mean()
+        #geom_dist = torch.sqrt(((out_a_aff_back - out_p_aff_back)**2 ).view(-1,4).sum(dim=1) + 1e-8).mean()
         if args.loss == 'HardNet':
             loss = loss_HardNet(desc_a,desc_p); 
         elif args.loss == 'HardNegC':
             loss = loss_HardNegC(desc_a,desc_p); 
-        elif args.loss == 'Geom':
-            loss = geom_dist; 
+        #elif args.loss == 'Geom':
+        #    loss = geom_dist; 
         elif args.loss == 'PosDist':
             loss = descr_dist; 
         else:

@@ -48,11 +48,11 @@ def get_random_norm_affine_LAFs(patches, max_tilt = 1.0):
         phi = phi.cuda()
         aff_LAFs = aff_LAFs.cuda()
     TA = get_normalized_affine_shape(tilt, phi)
-    inv_TA = Variable(torch.zeros(patches.size(0),2,2));
-    if patches.is_cuda:
-        inv_TA = inv_TA.cuda()
-    for i in range(len(inv_TA)):
-        inv_TA[i,:,:] = TA[i,:,:].inverse();
+    #inv_TA = Variable(torch.zeros(patches.size(0),2,2));
+    #if patches.is_cuda:
+    #    inv_TA = inv_TA.cuda()
+    #for i in range(len(inv_TA)):
+    #    inv_TA[i,:,:] = TA[i,:,:].inverse();
     aff_LAFs[:,0:2,0:2]  = torch.bmm(TA, aff_LAFs[:,0:2,0:2]);
-    return aff_LAFs, inv_TA;
+    return aff_LAFs, None#inv_TA;
 
