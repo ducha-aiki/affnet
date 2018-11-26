@@ -160,8 +160,8 @@ class ScaleSpaceAffinePatchExtractor(nn.Module):
         LAFs = torch.index_select(LAFs, 0, idxs)
         new_LAFs = torch.cat([torch.bmm(base_A, LAFs[:,:,0:2]),
                                LAFs[:,:,2:]], dim =2)
-        print 'affnet_time',affnet_time
-        print 'pe_time', pe_time
+        print ('affnet_time',affnet_time)
+        print ('pe_time', pe_time)
         return final_resp, new_LAFs, final_pyr_idxs, final_level_idxs  
     
     def getOrientation(self, LAFs, final_pyr_idxs, final_level_idxs):
@@ -193,12 +193,12 @@ class ScaleSpaceAffinePatchExtractor(nn.Module):
         if self.num_Baum_iters > 0:
             num_features_prefilter = int(1.5 * self.num);
         responses, LAFs, final_pyr_idxs, final_level_idxs = self.multiScaleDetector(x,num_features_prefilter)
-        print time.time() - t, 'detection multiscale'
+        print (time.time() - t, 'detection multiscale')
         t = time.time()
         LAFs[:,0:2,0:2] =   self.mrSize * LAFs[:,:,0:2]
         if self.num_Baum_iters > 0:
             responses, LAFs, final_pyr_idxs, final_level_idxs  = self.getAffineShape(responses, LAFs, final_pyr_idxs, final_level_idxs, self.num)
-        print time.time() - t, 'affine shape iters'
+        print (time.time() - t, 'affine shape iters')
         t = time.time()
         if do_ori:
             LAFs = self.getOrientation(LAFs, final_pyr_idxs, final_level_idxs)

@@ -208,7 +208,7 @@ class NMS2d(nn.Module):
 class NMS3d(nn.Module):
     def __init__(self, kernel_size = 3, threshold = 0):
         super(NMS3d, self).__init__()
-        self.MP = nn.MaxPool3d(kernel_size, stride=1, return_indices=False, padding = (0, kernel_size/2, kernel_size/2))
+        self.MP = nn.MaxPool3d(kernel_size, stride=1, return_indices=False, padding = (0, kernel_size//2, kernel_size//2))
         self.eps = 1e-5
         self.th = threshold
         return

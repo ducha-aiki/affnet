@@ -218,7 +218,7 @@ def convertLAFs_to_A23format(LAFs):
         work_LAFs[:,1,0] = LAFs[:,4]
         work_LAFs[:,1,1] = LAFs[:,5]
     else:
-        print 'Unknown LAF format'
+        print ('Unknown LAF format')
         return None
     return work_LAFs
 
@@ -321,7 +321,7 @@ def batched_grid_apply(img, grid, batch_size = 32):
     n_patches = len(grid)
     if n_patches > batch_size:
         bs = batch_size
-        n_batches = n_patches / bs + 1
+        n_batches = int(n_patches / bs + 1)
         for batch_idx in range(n_batches):
             st = batch_idx * bs
             if batch_idx == n_batches - 1:
@@ -453,7 +453,7 @@ def get_pyramid_and_level_index_for_LAFs(dLAFs,  sigmas, pix_dists, PS):
     for oct_idx in range(len(sigmas)):
         sigmas_full_list = sigmas_full_list + list(np.array(sigmas[oct_idx])*np.array(pix_dists[oct_idx]))
         oct_idxs_full = oct_idxs_full + [oct_idx]*len(sigmas[oct_idx])
-        level_idxs_full = level_idxs_full + range(0,len(sigmas[oct_idx]))
+        level_idxs_full = level_idxs_full + list(range(0,len(sigmas[oct_idx])))
     oct_idxs_full = torch.LongTensor(oct_idxs_full)
     level_idxs_full = torch.LongTensor(level_idxs_full)
     
