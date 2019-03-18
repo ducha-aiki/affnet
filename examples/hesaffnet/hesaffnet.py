@@ -47,7 +47,7 @@ AffNetPix.load_state_dict(checkpoint['state_dict'])
 
 AffNetPix.eval()
     
-HA = ScaleSpaceAffinePatchExtractor( mrSize = 5.192, num_features = nfeats, border = 5, num_Baum_iters = 1, threshold = th,  AffNet = AffNetPix)
+HA = ScaleSpaceAffinePatchExtractor( mrSize = 5.192, num_features = nfeats, border = 5, num_Baum_iters = 1, th = th,  AffNet = AffNetPix)
 if USE_CUDA:
     HA = HA.cuda()
     var_image_reshape = var_image_reshape.cuda()
