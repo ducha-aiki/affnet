@@ -29,7 +29,7 @@ try:
     output_fname = sys.argv[2]
     nfeats = int(sys.argv[3])
 except:
-    print "Wrong input format. Try python hesaffnet.py imgs/cat.png cat.txt 2000"
+    print ("Wrong input format. Try python hesaffnet.py imgs/cat.png cat.txt 2000")
     sys.exit(1)
 
 img = Image.open(input_img_fname).convert('RGB')
@@ -47,7 +47,7 @@ AffNetPix.load_state_dict(checkpoint['state_dict'])
 
 AffNetPix.eval()
     
-HA = ScaleSpaceAffinePatchExtractor( mrSize = 5.192, num_features = nfeats, border = 5, num_Baum_iters = 1, threshold = th,  AffNet = AffNetPix)
+HA = ScaleSpaceAffinePatchExtractor( mrSize = 5.192, num_features = nfeats, border = 5, num_Baum_iters = 1,  AffNet = AffNetPix)
 if USE_CUDA:
     HA = HA.cuda()
     var_image_reshape = var_image_reshape.cuda()
