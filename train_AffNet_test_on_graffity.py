@@ -246,7 +246,8 @@ def train(train_loader, model, optimizer, epoch):
 def load_grayscale_var(fname):
     img = Image.open(fname).convert('RGB')
     img = np.mean(np.array(img), axis = 2)
-    var_image = torch.autograd.Variable(torch.from_numpy(img.astype(np.float32)), volatile = True)
+    #var_image = torch.autograd.Variable(torch.from_numpy(img.astype(np.float32)), volatile = True)
+    var_image = torch.from_numpy(img.astype(np.float32))
     var_image_reshape = var_image.view(1, 1, var_image.size(0),var_image.size(1))
     if args.cuda:
         var_image_reshape = var_image_reshape.cuda()
@@ -302,8 +303,8 @@ def test(model,epoch):
         min_dist, plain_indxs_in1, idxs_in_2 = get_GT_correspondence_indexes(LAF1s_tent, LAF2s_tent,H1to2.cuda(), dist_threshold = 6) 
         plain_indxs_in1 = plain_indxs_in1.long()
         inl_ratio = float(plain_indxs_in1.size(0)) / float(tent_matches_in_1.size(0))
-        print 'Test epoch', str(epoch) 
-        print 'Test on graf1-6,', tent_matches_in_1.size(0), 'tentatives', plain_indxs_in1.size(0), 'true matches', str(inl_ratio)[:5], ' inl.ratio'
+        print ('Test epoch', str(epoch) )
+        print ('Test on graf1-6,', tent_matches_in_1.size(0), 'tentatives', plain_indxs_in1.size(0), 'true matches', str(inl_ratio)[:5], ' inl.ratio')
         visualize_LAFs(img1.detach().cpu().numpy().squeeze(), LAF1s_tent[plain_indxs_in1.long(),:,:].detach().cpu().numpy().squeeze(), 'g', show = False, save_to = LOG_DIR + "/inliers1_" + str(epoch) + '.png')
         visualize_LAFs(img2.detach().cpu().numpy().squeeze(), LAF2s_tent[plain_indxs_in1.long(),:,:].detach().cpu().numpy().squeeze(), 'g', show = False, save_to = LOG_DIR + "/inliers2_" + str(epoch) + '.png')
     ################
@@ -331,8 +332,8 @@ def test(model,epoch):
         min_dist, plain_indxs_in1, idxs_in_2 = get_GT_correspondence_indexes(LAF1s_tent, LAF2s_tent,H1to2.cuda(), dist_threshold = 6) 
         plain_indxs_in1 = plain_indxs_in1.long()
         inl_ratio = float(plain_indxs_in1.size(0)) / float(tent_matches_in_1.size(0))
-        print 'Test epoch', str(epoch) 
-        print 'Test on ori graf1-6,', tent_matches_in_1.size(0), 'tentatives', plain_indxs_in1.size(0), 'true matches', str(inl_ratio)[:5], ' inl.ratio'
+        print ('Test epoch', str(epoch) )
+        print ('Test on ori graf1-6,', tent_matches_in_1.size(0), 'tentatives', plain_indxs_in1.size(0), 'true matches', str(inl_ratio)[:5], ' inl.ratio')
         visualize_LAFs(img1.detach().cpu().numpy().squeeze(), LAF1s_tent[plain_indxs_in1.long(),:,:].detach().cpu().numpy().squeeze(), 'g', show = False, save_to = LOG_DIR + "/ori_inliers1_" + str(epoch) + '.png')
         visualize_LAFs(img2.detach().cpu().numpy().squeeze(), LAF2s_tent[idxs_in_2.long(),:,:].detach().cpu().numpy().squeeze(), 'g', show = False, save_to = LOG_DIR + "/ori_inliers2_" + str(epoch) + '.png')
     return
@@ -374,11 +375,13 @@ def main(train_loader, test_loader, model):
             print('=> no checkpoint found at {}'.format(args.resume))
     start = args.start_epoch
     end = start + args.epochs
-    test(model, -1)
+    with torch.no_grad():
+        test(model, -1)
     for epoch in range(start, end):
         # iterate over test loaders and test results
         train(train_loader, model, optimizer1, epoch)
-        test(model, epoch)
+        with torch.no_grad():
+            test(model, epoch)
     return 0
 if __name__ == '__main__':
     LOG_DIR = args.log_dir
