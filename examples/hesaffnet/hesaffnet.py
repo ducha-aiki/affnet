@@ -29,7 +29,7 @@ try:
     output_fname = sys.argv[2]
     nfeats = int(sys.argv[3])
 except:
-    print "Wrong input format. Try python hesaffnet.py imgs/cat.png cat.txt 2000"
+    print ("Wrong input format. Try python hesaffnet.py imgs/cat.png cat.txt 2000")
     sys.exit(1)
 
 img = Image.open(input_img_fname).convert('RGB')
