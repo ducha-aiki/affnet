@@ -247,7 +247,7 @@ class TotalDatasetsLoader(data.Dataset):
                 try:
                     y = indices[c1]
                 except:
-                    print indices.keys()
+                    print (indices.keys())
                     sys.exit(0)
                 if len(indices[c1]) == 2:  # hack to speed up process
                     n1, n2 = 0, 1

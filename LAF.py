@@ -100,7 +100,7 @@ def checkTouchBoundary(LAFs):
     if LAFs.is_cuda:
         pts = pts.cuda()
     out_pts =  torch.bmm(LAFs_to_H_frames(LAFs),pts.expand(LAFs.size(0),3,4))[:,:2,:]
-    good_points = 1 -(((out_pts > 1.0) +  (out_pts < 0.0)).sum(dim=1).sum(dim=1) > 0)
+    good_points = ~(((out_pts > 1.0) +  (out_pts < 0.0)).sum(dim=1).sum(dim=1) > 0)
     return good_points
 
 def bsvd2x2(As):
@@ -241,8 +241,14 @@ def LAFs2ell(in_LAFs):
 
 def visualize_LAFs(img, LAFs, color = 'r', show = False, save_to = None):
     work_LAFs = convertLAFs_to_A23format(LAFs)
+    try:
+        plt.close('all')
+    except:
+        pass
     plt.figure()
     plt.imshow(255 - img)
+    if work_LAFs is None:
+        work_LAFs = []
     for i in range(len(work_LAFs)):
         ell = LAF2pts(work_LAFs[i,:,:])
         plt.plot( ell[:,0], ell[:,1], color)
