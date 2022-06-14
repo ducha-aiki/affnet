@@ -323,7 +323,7 @@ def generate_patch_grid_from_normalized_LAFs(LAFs, w, h, PS):
     grid[:,:,:,1] = 2.0 * grid[:,:,:,1] / float(h)  - 1.0     
     return grid
 
-def batched_grid_apply(img, grid, batch_size = 32):
+def batched_grid_apply(img, grid, batch_size = 32, padding='zeros'):
     n_patches = len(grid)
     if n_patches > batch_size:
         bs = batch_size
@@ -341,9 +341,9 @@ def batched_grid_apply(img, grid, batch_size = 32):
                 continue
             if batch_idx == 0:
                 if img.size(0) != grid.size(0):
-                    first_batch_out = F.grid_sample(img.expand(end - st, img.size(1), img.size(2), img.size(3)), grid[st:end, :,:,:])# kwargs)
+                    first_batch_out = F.grid_sample(img.expand(end - st, img.size(1), img.size(2), img.size(3)), grid[st:end, :,:,:], padding_mode=padding)# kwargs)
                 else:
-                    first_batch_out = F.grid_sample(img[st:end], grid[st:end, :,:,:])# kwargs)
+                    first_batch_out = F.grid_sample(img[st:end], grid[st:end, :,:,:], padding_mode=padding)# kwargs)
                 out_size = torch.Size([n_patches] + list(first_batch_out.size()[1:]))
                 out = torch.zeros(out_size);
                 if img.is_cuda:
@@ -351,25 +351,25 @@ def batched_grid_apply(img, grid, batch_size = 32):
                 out[st:end] = first_batch_out
             else:
                 if img.size(0) != grid.size(0):
-                    out[st:end,:,:] = F.grid_sample(img.expand(end - st, img.size(1), img.size(2), img.size(3)), grid[st:end, :,:,:])
+                    out[st:end,:,:] = F.grid_sample(img.expand(end - st, img.size(1), img.size(2), img.size(3)), grid[st:end, :,:,:],padding_mode=padding)
                 else:
-                    out[st:end,:,:] = F.grid_sample(img[st:end], grid[st:end, :,:,:])
+                    out[st:end,:,:] = F.grid_sample(img[st:end], grid[st:end, :,:,:], padding_mode=padding)
         return out
     else:
         if img.size(0) != grid.size(0):
-            return F.grid_sample(img.expand(grid.size(0), img.size(1), img.size(2), img.size(3)), grid)
+            return F.grid_sample(img.expand(grid.size(0), img.size(1), img.size(2), img.size(3)), grid, padding_mode=padding)
         else:
-            return F.grid_sample(img, grid)
+            return F.grid_sample(img, grid, padding_mode=padding)
 
-def extract_patches(img, LAFs, PS = 32, bs = 32):
+def extract_patches(img, LAFs, PS = 32, bs = 32, padding='zeros'):
     w = img.size(3)
     h = img.size(2)
     ch = img.size(1)
     grid = generate_patch_grid_from_normalized_LAFs(LAFs, float(w),float(h), PS)
     if bs is None:
-        return torch.nn.functional.grid_sample(img.expand(grid.size(0), ch, h, w),  grid)  
+        return torch.nn.functional.grid_sample(img.expand(grid.size(0), ch, h, w),  grid, padding_mode=padding)  
     else:
-        return batched_grid_apply(img, grid, bs)
+        return batched_grid_apply(img, grid, bs, padding=padding)
 def get_pyramid_inverted_index_for_LAFs(LAFs, PS, sigmas):
     return
 

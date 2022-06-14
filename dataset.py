@@ -197,6 +197,8 @@ class TotalDatasetsLoader(data.Dataset):
         start = True
         for dataset_p in datasets_path:
             d = torch.load(dataset_p)
+            if 'colosseum' in dataset_p:
+                d = (d['patches'], d['labels'])
             if start:
                 data = d[0]
                 labels = d[1]

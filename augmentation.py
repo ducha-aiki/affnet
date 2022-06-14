@@ -38,6 +38,27 @@ def get_random_shifts_LAFs(patches, w_mag, h_mag = 3):
     shift_w = Variable(shift_w)
     return shift_w, shift_h
 
+def get_random_norm_affine_LAFs_log(patches, max_tilt = 1.0):
+    assert max_tilt > 0
+    aff_LAFs = Variable(torch.FloatTensor([[0.5, 0, 0.5],[0, 0.5, 0.5]]).unsqueeze(0).repeat(patches.size(0),1,1));
+    #tilt = Variable( 1/max_tilt + (max_tilt - 1./max_tilt)* torch.rand(patches.size(0), 1, 1));
+    min_t_log = -math.log(max_tilt)
+    max_t_log = math.log(max_tilt)
+    tilt = torch.exp(min_t_log + (max_t_log - min_t_log) * torch.rand(patches.size(0), 1, 1));
+    phi  = math.pi * (Variable(2.0 * torch.rand(patches.size(0)) - 1.0) ).view(-1,1,1)
+    if patches.is_cuda:
+        tilt = tilt.cuda()
+        phi = phi.cuda()
+        aff_LAFs = aff_LAFs.cuda()
+    TA = get_normalized_affine_shape(tilt, phi)
+    #inv_TA = Variable(torch.zeros(patches.size(0),2,2));
+    #if patches.is_cuda:
+    #    inv_TA = inv_TA.cuda()
+    #for i in range(len(inv_TA)):
+    #    inv_TA[i,:,:] = TA[i,:,:].inverse();
+    aff_LAFs[:,0:2,0:2]  = torch.bmm(TA, aff_LAFs[:,0:2,0:2]);
+    return aff_LAFs, None#inv_TA;
+
 def get_random_norm_affine_LAFs(patches, max_tilt = 1.0):
     assert max_tilt > 0
     aff_LAFs = Variable(torch.FloatTensor([[0.5, 0, 0.5],[0, 0.5, 0.5]]).unsqueeze(0).repeat(patches.size(0),1,1));

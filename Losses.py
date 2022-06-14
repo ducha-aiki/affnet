@@ -1,6 +1,14 @@
 import torch
 import torch.nn as nn
 import sys
+import torch.nn.functional as F
+
+def geom_loss(generated_aff, estimated_aff, inv_rotmat):
+    num = len(generated_aff)
+    have_to_be_identity = generated_aff[:,:2,:2] @ estimated_aff[:,:2,:2]  @ inv_rotmat[:, :2, :2]  * 4
+    eye = torch.eye(2,device=generated_aff.device, dtype=generated_aff.dtype)[None].repeat(num, 1, 1)
+    loss = F.mse_loss(have_to_be_identity, eye, reduction='mean')
+    return loss
 
 def distance_matrix_vector(anchor, positive):
     """Given batch of anchor descriptors and positive descriptors calculate distance matrix"""

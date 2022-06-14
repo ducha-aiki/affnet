@@ -36,7 +36,7 @@ from augmentation import get_random_norm_affine_LAFs,get_random_rotation_LAFs, g
 from LAF import denormalizeLAFs, LAFs2ell, abc2A, extract_patches,normalizeLAFs
 from pytorch_sift import SIFTNet
 from HardNet import HardNet, L2Norm, HardTFeatNet
-from Losses import loss_HardNegC, loss_HardNet
+from Losses import loss_HardNegC, loss_HardNet, geom_loss
 from SparseImgRepresenter import ScaleSpaceAffinePatchExtractor
 from LAF import denormalizeLAFs, LAFs2ell, abc2A,visualize_LAFs
 from Losses import distance_matrix_vector
@@ -56,6 +56,10 @@ parser.add_argument('--log-dir', default='./logs',
 parser.add_argument('--num-workers', default= 8,
                     help='Number of workers to be created')
 parser.add_argument('--pin-memory',type=bool, default= True,
+                    help='')
+parser.add_argument('--predict_on_full',type=bool, default=False,
+                    help='')
+parser.add_argument('--desc_on_full',type=bool, default=False,
                     help='')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
@@ -92,6 +96,9 @@ parser.add_argument('--descriptor', type=str,
 parser.add_argument('--loss', type=str,
                     default='HardNet',
                     help='Variants: HardNet, HardNegC, PosDist')
+parser.add_argument('--padding', type=str,
+                    default='zeros',
+                    help='Variants: zeros, border, reflection')
 parser.add_argument('--arch', type=str,
                     default='AffNetFast',
                     help='Variants: AffNetFast, AffNetFast4, AffNetFast4Rot')
@@ -141,7 +148,7 @@ elif args.descriptor == 'TFeat':
 else:
     descriptor = lambda x: L2Norm()(x.view(x.size(0),-1) - x.view(x.size(0),-1).mean(dim=1, keepdim=True).expand(x.size(0),x.size(1)*x.size(2)*x.size(3)).detach())
 
-suffix = args.expname +"_" + args.arch + '_6Brown_' +  args.descriptor + '_' + str(args.lr) + '_' + str(args.n_pairs) + "_" + str(args.loss) 
+suffix = args.expname +"_full" + str(args.predict_on_full) + str(args.desc_on_full) + "_" +  args.arch + '_6Brown_' +  args.descriptor + '_' + str(args.lr) + '_' + str(args.n_pairs) + "_" + str(args.loss) + str(args.padding)
 ##########################################3
 def create_loaders():
 
@@ -162,7 +169,7 @@ def create_loaders():
                              shuffle=False, **kwargs)
     return train_loader, None
 
-def extract_and_crop_patches_by_predicted_transform(patches, trans, crop_size = 32):
+def extract_and_crop_patches_by_predicted_transform(patches, trans, crop_size = 32, padding='zeros'):
     assert patches.size(0) == trans.size(0)
     st = int((patches.size(2) - crop_size) / 2)
     fin = st + crop_size
@@ -171,9 +178,9 @@ def extract_and_crop_patches_by_predicted_transform(patches, trans, crop_size = 
         rot_LAFs = rot_LAFs.cuda()
         trans = trans.cuda()
     rot_LAFs1  = torch.cat([torch.bmm(trans, rot_LAFs[:,0:2,0:2]), rot_LAFs[:,0:2,2:]], dim = 2);
-    return extract_patches(patches,  rot_LAFs1, PS = patches.size(2))[:,:, st:fin, st:fin].contiguous()
+    return extract_patches(patches,  rot_LAFs1, PS = patches.size(2), padding=padding)[:,:, st:fin, st:fin].contiguous()
     
-def extract_random_LAF(data, max_rot = math.pi, max_tilt = 1.0, crop_size = 32):
+def extract_random_LAF(data, max_rot = math.pi, max_tilt = 1.0, crop_size = 32, padding='zeros'):
     st = int((data.size(2) - crop_size)/2)
     fin = st + crop_size
     if type(max_rot) is float:
@@ -183,9 +190,9 @@ def extract_random_LAF(data, max_rot = math.pi, max_tilt = 1.0, crop_size = 32):
         inv_rotmat = None
     aff_LAFs, inv_TA = get_random_norm_affine_LAFs(data, max_tilt);
     aff_LAFs[:,0:2,0:2] = torch.bmm(rot_LAFs[:,0:2,0:2],aff_LAFs[:,0:2,0:2])
-    data_aff = extract_patches(data,  aff_LAFs, PS = data.size(2))
+    data_aff = extract_patches(data,  aff_LAFs, PS = data.size(2), padding=padding)
     data_affcrop = data_aff[:,:, st:fin, st:fin].contiguous()
-    return data_affcrop, data_aff, rot_LAFs,inv_rotmat,inv_TA 
+    return data_affcrop, data_aff, rot_LAFs,inv_rotmat,inv_TA, aff_LAFs
 def train(train_loader, model, optimizer, epoch):
     # switch to train mode
     model.train()
@@ -203,29 +210,36 @@ def train(train_loader, model, optimizer, epoch):
             if ep1 < 0:
                 break
         max_tilt = tilt_schedule[str(ep1)]
-        data_a_aff_crop, data_a_aff, rot_LAFs_a, inv_rotmat_a, inv_TA_a = extract_random_LAF(data_a, math.pi, max_tilt, model.PS)
+        data_a_aff_crop, data_a_aff, rot_LAFs_a, inv_rotmat_a, inv_TA_a, aff_LAFs_a = extract_random_LAF(data_a, math.pi, max_tilt, model.PS, args.padding)
         if 'Rot' not in args.arch:
-            data_p_aff_crop, data_p_aff, rot_LAFs_p, inv_rotmat_p, inv_TA_p = extract_random_LAF(data_p, rot_LAFs_a, max_tilt, model.PS)
+            data_p_aff_crop, data_p_aff, rot_LAFs_p, inv_rotmat_p, inv_TA_p, aff_LAFs_p = extract_random_LAF(data_p, rot_LAFs_a, max_tilt, model.PS, args.padding)
         else:
-            data_p_aff_crop, data_p_aff, rot_LAFs_p, inv_rotmat_p, inv_TA_p = extract_random_LAF(data_p, math.pi, max_tilt, model.PS)
+            data_p_aff_crop, data_p_aff, rot_LAFs_p, inv_rotmat_p, inv_TA_p, aff_LAFs_p = extract_random_LAF(data_p, math.pi, max_tilt, model.PS, args.padding)
         if inv_rotmat_p is None:
             inv_rotmat_p = inv_rotmat_a
-        out_a_aff, out_p_aff = model(data_a_aff_crop,True), model(data_p_aff_crop,True)
+        if args.predict_on_full:
+            import kornia as K
+            out_a_aff, out_p_aff = model(K.geometry.resize(data_a_aff,(32,32)),True), model(K.geometry.resize(data_p_aff, (32,32)),True)
+        else:
+            out_a_aff, out_p_aff = model(data_a_aff_crop,True), model(data_p_aff_crop,True)
         #out_a_aff_back = torch.bmm(torch.bmm(out_a_aff, inv_TA_a),  inv_rotmat_a)
         #out_p_aff_back = torch.bmm(torch.bmm(out_p_aff, inv_TA_p),  inv_rotmat_p)
         ###### Get descriptors
-        out_patches_a_crop = extract_and_crop_patches_by_predicted_transform(data_a_aff, out_a_aff, crop_size = model.PS)
-        out_patches_p_crop = extract_and_crop_patches_by_predicted_transform(data_p_aff, out_p_aff, crop_size = model.PS)
+        out_patches_a_crop = extract_and_crop_patches_by_predicted_transform(data_a_aff, out_a_aff, crop_size = model.PS, padding=args.padding)
+        out_patches_p_crop = extract_and_crop_patches_by_predicted_transform(data_p_aff, out_p_aff, crop_size = model.PS, padding=args.padding)
         desc_a = descriptor(out_patches_a_crop)
         desc_p = descriptor(out_patches_p_crop)
         descr_dist =  torch.sqrt(((desc_a - desc_p)**2).view(data_a.size(0),-1).sum(dim=1) + 1e-6).mean()
+        loss_geometric = geom_loss(aff_LAFs_a, out_a_aff, inv_rotmat_a) + geom_loss(aff_LAFs_p, out_p_aff, inv_rotmat_p)
         #geom_dist = torch.sqrt(((out_a_aff_back - out_p_aff_back)**2 ).view(-1,4).sum(dim=1) + 1e-8).mean()
         if args.loss == 'HardNet':
             loss = loss_HardNet(desc_a,desc_p); 
         elif args.loss == 'HardNegC':
             loss = loss_HardNegC(desc_a,desc_p); 
-        #elif args.loss == 'Geom':
-        #    loss = geom_dist; 
+        elif args.loss == 'Geom':
+            loss = loss_geometric; 
+        elif args.loss == 'GeomHardNegC':
+            loss = loss_geometric + loss_HardNegC(desc_a,desc_p); 
         elif args.loss == 'PosDist':
             loss = descr_dist; 
         else:
@@ -237,10 +251,10 @@ def train(train_loader, model, optimizer, epoch):
         adjust_learning_rate(optimizer)
         if batch_idx % args.log_interval == 0:
             pbar.set_description(
-                'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.4f},{:.4f}'.format(
+                    'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.4f},{:.4f}, {:.4f}'.format(
                     epoch, batch_idx * len(data_a), len(train_loader.dataset),
                            100. * batch_idx / len(train_loader),
-                    float(loss.detach().cpu().numpy()), float(descr_dist.detach().cpu().numpy())))
+                    float(loss.detach().cpu().numpy()), float(descr_dist.detach().cpu().numpy()), loss_geometric.detach().cpu().item()))
     torch.save({'epoch': epoch + 1, 'state_dict': model.state_dict()},
                '{}/checkpoint_{}.pth'.format(LOG_DIR,epoch))
 def load_grayscale_var(fname):
@@ -352,7 +366,13 @@ def adjust_learning_rate(optimizer):
     return
 
 def create_optimizer(model, new_lr):
-    optimizer = optim.SGD(model.parameters(), lr=new_lr,
+    if isinstance(model, list):
+        params = []
+        for x in model:
+            params += list(x.parameters())
+    else:
+        params = model.parameters()
+    optimizer = optim.SGD(params, lr=new_lr,
                           momentum=0.9, dampening=0.9,
                           weight_decay=args.wd)
     return optimizer
@@ -362,13 +382,18 @@ def main(train_loader, test_loader, model):
     print('\nparsed options:\n{}\n'.format(vars(args)))
     if args.cuda:
         model.cuda()
-    optimizer1 = create_optimizer(model, args.lr)
+    if args.arch == 'AffNetFastSIFT':
+        optimizer1 = create_optimizer([model.features, model.features2], args.lr)
+    else:
+        optimizer1 = create_optimizer(model, args.lr)
+
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
             print('=> loading checkpoint {}'.format(args.resume))
             checkpoint = torch.load(args.resume)
-            args.start_epoch = checkpoint['epoch']
+            if args.start_epoch == 0:
+                args.start_epoch = checkpoint['epoch']
             checkpoint = torch.load(args.resume)
             model.load_state_dict(checkpoint['state_dict'])
         else:
@@ -389,9 +414,13 @@ if __name__ == '__main__':
     if not os.path.isdir(LOG_DIR):
         os.makedirs(LOG_DIR)
     from architectures import AffNetFast, AffNetFastScale, AffNetFast4, AffNetFast4RotNosc, AffNetFast52RotUp,AffNetFast52Rot,AffNetFast5Rot, AffNetFast4Rot, AffNetFast4Rot
-    from architectures import AffNetFast2Par,AffNetFastBias
+    from architectures import AffTFeat, AffNetFast2Par,AffNetFastBias, AffNetFastSIFT
     if args.arch == 'AffNetFast':
         model = AffNetFast(PS=PS)
+    elif args.arch == 'AffNetFastSIFT':
+        model = AffNetFastSIFT(PS=PS)
+    elif args.arch == 'AffTFeat':
+        model = AffTFeat(PS=PS)
     elif args.arch == 'AffNetFastBias':
         model = AffNetFastBias(PS=PS)
     elif args.arch == 'AffNetFastScale':
@@ -412,6 +441,8 @@ if __name__ == '__main__':
         model = AffNetFast5Rot(PS=PS)
     elif args.arch == 'AffNetFast4RotNosc':
         model = AffNetFast4RotNosc(PS=PS)
+    elif args.arch == 'AffNetWithHandCrafted':
+        model = AffNetWithHandCrafted(PS=PS)
     else:
         print (args.arch, 'is incorrect architecture')
         sys.exit(1)

@@ -1,4 +1,5 @@
 from __future__ import division, print_function
+import kornia.feature as KF
 import os
 import errno
 import numpy as np
@@ -18,6 +19,9 @@ from LAF import denormalizeLAFs, LAFs2ell, abc2A, extract_patches,normalizeLAFs,
 from LAF import get_LAFs_scales, get_normalized_affine_shape
 from LAF import rectifyAffineTransformationUpIsUp,rectifyAffineTransformationUpIsUpFullyConv
 
+from kornia.filters.sobel import SpatialGradient
+from LAF import *
+import kornia
 class LocalNorm2d(nn.Module):
     def __init__(self, kernel_size = 33):
         super(LocalNorm2d, self).__init__()
@@ -201,6 +205,100 @@ class AffNetFast4(nn.Module):
         return rectifyAffineTransformationUpIsUp(xy).contiguous()
 
     
+class AffNetFastSIFT(nn.Module):
+    def __init__(self, PS = 32):
+        super(AffNetFastSIFT, self).__init__()
+        self.SIFT = nn.Sequential(KF.DenseSIFTDescriptor(8, 2, 4, True, stride=2, padding=0),
+                                  nn.BatchNorm2d(32, affine=False))
+
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, padding=1, bias = False),
+            nn.BatchNorm2d(16, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias = False),
+            nn.BatchNorm2d(16, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1, bias = False),
+            nn.BatchNorm2d(32, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1, bias = False),
+            nn.BatchNorm2d(32, affine=False),
+            nn.ReLU())
+        self.features2 = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias = False),
+            nn.BatchNorm2d(64, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias = False),
+            nn.BatchNorm2d(64, affine=False),
+            nn.ReLU(),
+            nn.Dropout(0.25),
+            nn.Conv2d(64, 3, kernel_size=8, stride=1, padding=0, bias = True),
+            nn.Tanh(),
+            nn.AdaptiveAvgPool2d(1)
+        )
+        self.PS = PS
+        self.features.apply(self.weights_init)
+        self.features2.apply(self.weights_init)
+        self.halfPS = int(PS/2)
+        return
+    def input_norm(self,x):
+        flat = x.view(x.size(0), -1)
+        mp = torch.mean(flat, dim=1).detach()
+        sp = torch.std(flat, dim=1).detach() + 1e-7
+        return (x - mp.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(x)) / sp.unsqueeze(-1).unsqueeze(-1).unsqueeze(1).expand_as(x)
+    def weights_init(self,m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.orthogonal(m.weight.data, gain=0.8)
+            try:
+                nn.init.constant(m.bias.data, 0.01)
+            except:
+                pass
+        return
+    def forward(self, input, return_A_matrix = False):
+        ni = self.input_norm(input)
+        f1 = self.features(ni)
+        sift = self.SIFT(ni)
+        xy = self.features2(torch.cat([f1, sift], dim=1)).view(-1,3)
+        a1 = torch.cat([1.0 + xy[:,0].contiguous().view(-1,1,1), 0 * xy[:,0].contiguous().view(-1,1,1)], dim = 2).contiguous()
+        a2 = torch.cat([xy[:,1].contiguous().view(-1,1,1), 1.0 + xy[:,2].contiguous().view(-1,1,1)], dim = 2).contiguous()
+        return rectifyAffineTransformationUpIsUp(torch.cat([a1,a2], dim = 1).contiguous())
+
+class AffTFeat(nn.Module):
+    def __init__(self, PS = 32):
+        super(AffTFeat, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=7),
+            nn.Tanh(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(32, 64, kernel_size=6),
+            nn.Tanh(),
+            nn.Dropout(0.25),
+            nn.Conv2d(64, 3, kernel_size=8, stride=1, padding=0, bias = True),
+            nn.Tanh(),
+            nn.AdaptiveAvgPool2d(1)
+        )
+        self.PS = PS
+        self.features.apply(self.weights_init)
+        self.halfPS = int(PS/2)
+        return
+    def input_norm(self,x):
+        flat = x.view(x.size(0), -1)
+        mp = torch.mean(flat, dim=1).detach()
+        sp = torch.std(flat, dim=1).detach() + 1e-7
+        return (x - mp.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(x)) / sp.unsqueeze(-1).unsqueeze(-1).unsqueeze(1).expand_as(x)
+    def weights_init(self,m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.orthogonal(m.weight.data, gain=0.8)
+            try:
+                nn.init.constant(m.bias.data, 0.01)
+            except:
+                pass
+        return
+    def forward(self, input, return_A_matrix = False):
+        xy = self.features(self.input_norm(input)).view(-1,3)
+        a1 = torch.cat([1.0 + xy[:,0].contiguous().view(-1,1,1), 0 * xy[:,0].contiguous().view(-1,1,1)], dim = 2).contiguous()
+        a2 = torch.cat([xy[:,1].contiguous().view(-1,1,1), 1.0 + xy[:,2].contiguous().view(-1,1,1)], dim = 2).contiguous()
+        return rectifyAffineTransformationUpIsUp(torch.cat([a1,a2], dim = 1).contiguous())
 class AffNetFast(nn.Module):
     def __init__(self, PS = 32):
         super(AffNetFast, self).__init__()
@@ -780,3 +878,120 @@ class AffNetFastBias(nn.Module):
         a1 = torch.cat([xy[:,0].contiguous().view(-1,1,1), 0 * xy[:,0].contiguous().view(-1,1,1)], dim = 2).contiguous()
         a2 = torch.cat([xy[:,1].contiguous().view(-1,1,1), xy[:,2].contiguous().view(-1,1,1)], dim = 2).contiguous()
         return rectifyAffineTransformationUpIsUp(torch.cat([a1,a2], dim = 1).contiguous())
+
+
+class AffNetWithHandCrafted(nn.Module):
+    def __init__(self, PS = 32):
+        super(AffNetWithHandCrafted, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, padding=1, bias = False),
+            nn.BatchNorm2d(16, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias = False),
+            nn.BatchNorm2d(16, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1, bias = False),
+            nn.BatchNorm2d(32, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1, bias = False),
+            nn.BatchNorm2d(32, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1, bias = False),
+            nn.BatchNorm2d(64, affine=False),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias = False),
+            nn.BatchNorm2d(64, affine=False),
+            nn.ReLU(),
+            nn.Dropout(0.25),
+            nn.Conv2d(64, 3, kernel_size=8, stride=1, padding=0, bias = True),
+            nn.Tanh(),
+            nn.AdaptiveAvgPool2d(1)
+        )
+        self.gradient = SpatialGradient('sobel', 1)
+        self.gradient2 = SpatialGradient('sobel', 2)
+        self.mix = nn.Sequential(
+                nn.BatchNorm2d(6, affine=False),
+                nn.Conv2d(6, 12, kernel_size=1, stride=1, padding=0, bias = False),
+                nn.BatchNorm2d(12, affine=False),
+                nn.Tanh(),
+                nn.Conv2d(12, 3, kernel_size=1, stride=1, padding=0, bias = True),
+                nn.Tanh())
+        self.PS = PS
+        self.features.apply(self.weights_init)
+        self.halfPS = int(PS/2)
+        self.register_buffer('circular_shape', torch.tensor([1.0, 0.0, 1.0]))
+        return
+    def input_norm(self,x):
+        flat = x.view(x.size(0), -1)
+        mp = torch.mean(flat, dim=1).detach()
+        sp = torch.std(flat, dim=1).detach() + 1e-7
+        return (x - mp.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).expand_as(x)) / sp.unsqueeze(-1).unsqueeze(-1).unsqueeze(1).expand_as(x)
+    def weights_init(self,m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.orthogonal(m.weight.data, gain=0.8)
+            try:
+                nn.init.constant(m.bias.data, 0.01)
+            except:
+                pass
+        return
+    def BaumbergAffine(self, input):
+        
+        grads: torch.Tensor = self.gradient(input)
+        # unpack the edges
+        gx: torch.Tensor = grads[:, :, 0]
+        gy: torch.Tensor = grads[:, :, 1]
+        # abc == 1st axis, mixture, 2nd axis. Ellipse_shape is a 2nd moment matrix.
+        ellipse_shape = torch.cat(
+            [
+                gx.pow(2).mean(dim=2).mean(dim=2, keepdim=True),
+                (gx * gy).mean(dim=2).mean(dim=2, keepdim=True),
+                gy.pow(2).mean(dim=2).mean(dim=2, keepdim=True),
+            ],
+            dim=2,
+        )
+
+        # Now lets detect degenerate cases: when 2 or 3 elements are close to zero (e.g. if patch is completely black
+        bad_mask = ((ellipse_shape < 1e-6).float().sum(dim=2, keepdim=True) >= 2).to(ellipse_shape.dtype)
+        # We will replace degenerate shape with circular shapes.
+        circular_shape = self.circular_shape.to(ellipse_shape.device).to(ellipse_shape.dtype).view(1, 1, 3)
+        ellipse_shape = ellipse_shape * (1.0 - bad_mask) + circular_shape * bad_mask
+        # normalizatio'
+        ellipse_shape = ellipse_shape / ellipse_shape.max(dim=2, keepdim=True)[0]
+        return ellipse_shape
+
+    def Baumberg2ndgrad(self, input):
+        grads: torch.Tensor = self.gradient2(input) 
+        # unpack the edges
+        gxx: torch.Tensor = grads[:, :, 0]
+        gxy: torch.Tensor = grads[:, :, 1]
+        gyy: torch.Tensor = grads[:, :, 2]
+        # abc == 1st axis, mixture, 2nd axis. Ellipse_shape is a 2nd moment matrix.
+        ellipse_shape = torch.cat(
+            [
+                gxx.mean(dim=2).mean(dim=2, keepdim=True),
+                gxy.mean(dim=2).mean(dim=2, keepdim=True),
+                gyy.mean(dim=2).mean(dim=2, keepdim=True),
+            ],
+            dim=2,
+        )
+
+        # Now lets detect degenerate cases: when 2 or 3 elements are close to zero (e.g. if patch is completely black
+        bad_mask = ((ellipse_shape.abs() < 1e-6).float().sum(dim=2, keepdim=True) >= 2).to(ellipse_shape.dtype)
+        # We will replace degenerate shape with circular shapes.
+        circular_shape = self.circular_shape.to(ellipse_shape.device).to(ellipse_shape.dtype).view(1, 1, 3)
+        ellipse_shape = ellipse_shape * (1.0 - bad_mask) + circular_shape * bad_mask
+        # normalizatio'
+        ellipse_shape = ellipse_shape / ellipse_shape.abs().max(dim=2, keepdim=True)[0]
+        return ellipse_shape
+    def forward(self, input, return_A_matrix = False):
+        xy = self.features(self.input_norm(input)).view(-1,3)
+        baum = self.BaumbergAffine(input)
+        #hes = self.Baumberg2ndgrad(input)
+        out_cat = torch.cat([xy.reshape(-1,3), baum.reshape(-1,3)], dim=1).view(-1, 6, 1, 1)
+        xy_again = self.mix(out_cat).view(-1,3)
+        
+        new_a1 = torch.cat([1.0 + xy_again[:,0].contiguous().view(-1,1,1), 0 * xy_again[:,0].contiguous().view(-1,1,1)], dim = 2).contiguous()
+        new_a2 = torch.cat([xy_again[:,1].contiguous().view(-1,1,1), 1.0 +xy_again[:,2].contiguous().view(-1,1,1)], dim = 2).contiguous()
+        new_out =  rectifyAffineTransformationUpIsUp(torch.cat([new_a1, new_a2], dim = 1).contiguous())
+        
+        return new_out
