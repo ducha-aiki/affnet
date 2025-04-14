@@ -8,6 +8,11 @@ AffNet generates up to twice more correspondeces compared to Baumberg iterations
 ![HesAffNet](imgs/graf16HesAffNet.jpg)
 
 
+## Update April 2025
+
+The PhotoTour dataset is [no longer available](https://github.com/pytorch/vision/issues/8960) at original links. We use a [mirror from CTU in Prague](https://cmp.felk.cvut.cz/~mishkdmy/datasets/BrownPhotoTour/) instead.
+
+
 ## Retrieval on Oxford5k, mAP
 
 | Detector + Descriptor | BoW  |  BoW + SV | BoW + SV + QE | HQE + MA |

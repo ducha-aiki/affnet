@@ -24,6 +24,7 @@ import random
 import cv2
 import copy
 from Utils import str2bool
+from phototour import PhotoTour
 
 def find_files(_data_dir, _image_ext):
     """Return a list with the file names of the images containing the patches
@@ -289,46 +290,11 @@ class TotalDatasetsLoader(data.Dataset):
             if self.train:
                 return self.pairs.size(0)
 
-class TripletPhotoTour(dset.PhotoTour):
+class TripletPhotoTour(PhotoTour):
     """From the PhotoTour Dataset it generates triplet samples
     note: a triplet is composed by a pair of matching images and one of
     different class.
     """
-    urls = {
-        'notredame_harris': [
-            'http://matthewalunbrown.com/patchdata/notredame_harris.zip',
-            'notredame_harris.zip',
-            '69f8c90f78e171349abdf0307afefe4d'
-        ],
-        'yosemite_harris': [
-            'http://matthewalunbrown.com/patchdata/yosemite_harris.zip',
-            'yosemite_harris.zip',
-            'a73253d1c6fbd3ba2613c45065c00d46'
-        ],
-        'liberty_harris': [
-            'http://matthewalunbrown.com/patchdata/liberty_harris.zip',
-            'liberty_harris.zip',
-            'c731fcfb3abb4091110d0ae8c7ba182c'
-        ],
-        'notredame': [
-            'http://icvl.ee.ic.ac.uk/vbalnt/notredame.zip',
-            'notredame.zip',
-            '509eda8535847b8c0a90bbb210c83484'
-        ],
-        'yosemite': [
-            'http://icvl.ee.ic.ac.uk/vbalnt/yosemite.zip',
-            'yosemite.zip',
-            '533b2e8eb7ede31be40abc317b2fd4f0'
-        ],
-        'liberty': [
-            'http://icvl.ee.ic.ac.uk/vbalnt/liberty.zip',
-            'liberty.zip',
-            'fdd9152f138ea5ef2091746689176414'
-        ],
-    }
-    mean = {'notredame': 0.4854, 'yosemite': 0.4844, 'liberty': 0.4437, 'notredame_harris': 0.4854, 'yosemite_harris': 0.4844, 'liberty_harris': 0.4437}
-    std = {'notredame': 0.1864, 'yosemite': 0.1818, 'liberty': 0.2019, 'notredame_harris': 0.1864, 'yosemite_harris': 0.1818, 'liberty_harris': 0.2019}
-    lens = {'notredame': 468159, 'yosemite': 633587, 'liberty': 450092, 'liberty_harris': 379587, 'yosemite_harris': 450912 , 'notredame_harris': 325295}
     def __init__(self, train=True, transform=None, batch_size = None, n_triplets = 5000, load_random_triplets = False,  *arg, **kw):
         super(TripletPhotoTour, self).__init__(*arg, **kw)
         self.transform = transform
